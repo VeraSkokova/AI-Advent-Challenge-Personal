@@ -11,21 +11,21 @@ class SpeechService(private val config: VoiceConfig) {
             return "Error: Audio file not found."
         }
 
-        // Expected output file by whisper.cpp when using -otxt is input_filename.txt (usually appends .txt)
-        // Check whisper.cpp documentation or behavior. Usually input.wav -> input.wav.txt
+        // Expected output file by whisper.cpp when using -otxt is input_filename.txt
         val outputTxtFile = File(audioFile.absolutePath + ".txt")
         if (outputTxtFile.exists()) {
             outputTxtFile.delete()
         }
 
-        // main.exe -m [model] -f [file] -l ru -otxt
         val command = listOf(
             config.whisperPath,
             "-m", config.whisperModelPath,
             "-f", audioFile.absolutePath,
             "-l", "ru",
-            "-otxt" // Output to text file
+            "-otxt"
         )
+        
+        println("DEBUG: Executing Whisper: ${command.joinToString(" ")}")
 
         try {
             val processBuilder = ProcessBuilder(command)
@@ -33,21 +33,25 @@ class SpeechService(private val config: VoiceConfig) {
             
             val process = processBuilder.start()
             
-            // Consume stdout to prevent blocking, but we don't really need it if we read the file
-            Thread {
+            val outputLog = StringBuilder()
+            
+            val readerThread = Thread {
                 process.inputStream.bufferedReader().forEachLine { 
-                    // println("WHISPER: $it") 
+                    outputLog.appendLine(it)
                 }
-            }.start()
+            }
+            readerThread.start()
 
-            val finished = process.waitFor(60, TimeUnit.SECONDS) // wait up to 60s
+            val finished = process.waitFor(60, TimeUnit.SECONDS)
+            readerThread.join(1000) // Wait for logs to be consumed
+
             if (!finished) {
                 process.destroy()
-                return "Error: Transcription timed out."
+                return "Error: Transcription timed out.\nLogs:\n$outputLog"
             }
 
             if (process.exitValue() != 0) {
-                 return "Error: Whisper process failed with code ${process.exitValue()}"
+                 return "Error: Whisper process failed with code ${process.exitValue()}.\nLogs:\n$outputLog"
             }
 
             if (outputTxtFile.exists()) {
@@ -55,7 +59,7 @@ class SpeechService(private val config: VoiceConfig) {
                 outputTxtFile.delete()
                 return text
             } else {
-                return "Error: Output file not created."
+                return "Error: Output file not created.\nLogs:\n$outputLog"
             }
 
         } catch (e: Exception) {
