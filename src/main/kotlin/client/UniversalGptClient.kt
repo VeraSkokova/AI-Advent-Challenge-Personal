@@ -41,7 +41,8 @@ class UniversalGptClient(
         systemPrompt: String,
         model: ModelConfig = ModelsRepository.YandexPro,
         maxTokens: Int = 2000,
-        temperature: Double = 0.6
+        temperature: Double = 0.6,
+        jsonMode: Boolean = false // New parameter, default is false
     ): String = runCatching {
 
         val folderId = config.folderId
@@ -59,7 +60,11 @@ class UniversalGptClient(
                     put("temperature", temperature)
                     put("maxTokens", maxTokens.toString())
                 }
-                // REMOVED: put("jsonObject", true) - this forced JSON output, causing empty responses in chat mode
+                
+                // Only enable JSON mode if supported by model AND requested by caller
+                if (model.supportsJsonMode && jsonMode) {
+                    put("jsonObject", true)
+                }
                 
                 putJsonArray("messages") {
                     fullHistory.forEach { msg ->
@@ -71,19 +76,13 @@ class UniversalGptClient(
                 }
             }
 
-            // Uncomment for debugging if needed
-            // println("Request Body: $requestBody")
-
             val response: HttpResponse = client.post("https://llm.api.cloud.yandex.net/foundationModels/v1/completion") {
                 header("Authorization", "Api-Key ${config.apiKey}")
-                // header("x-folder-id", folderId) // Not strictly required if modelUri has it, but good practice sometimes.
                 contentType(ContentType.Application.Json)
                 setBody(requestBody)
             }
 
             val responseBodyText = response.bodyAsText()
-            // println("Response Body: $responseBodyText") // Debugging
-
             val json = Json.parseToJsonElement(responseBodyText).jsonObject
 
             // Handle Error
