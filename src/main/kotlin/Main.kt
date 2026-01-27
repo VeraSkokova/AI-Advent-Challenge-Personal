@@ -5,8 +5,7 @@ import model.Message
 import service.AudioRecorder
 import service.SpeechService
 import java.io.File
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.util.Scanner
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
@@ -38,8 +37,8 @@ fun main() = runBlocking {
     val recorder = AudioRecorder(voiceConfig)
     val speechService = SpeechService(voiceConfig)
     
-    // Используем BufferedReader вместо Scanner для более надежного чтения строк
-    val reader = BufferedReader(InputStreamReader(System.`in`))
+    // Возвращаем Scanner, так как BufferedReader иногда требует двойного нажатия на Windows
+    val scanner = Scanner(System.`in`)
 
     val history = mutableListOf<Message>()
     val tempWav = File("temp_recording.wav")
@@ -49,7 +48,9 @@ fun main() = runBlocking {
         println("\n------------------------------------------------")
         println("Нажмите ENTER, чтобы начать запись (или введите 'exit'):")
         
-        val input = reader.readLine() ?: break
+        if (!scanner.hasNextLine()) break
+        val input = scanner.nextLine()
+        
         if (input.trim().equals("exit", ignoreCase = true)) {
             break
         }
@@ -58,25 +59,21 @@ fun main() = runBlocking {
         println(">> Инициализация записи...")
         recorder.startRecording(tempWav)
         
-        // Пауза, чтобы FFmpeg успел захватить устройство
-        Thread.sleep(500)
-        
-        // Очистка буфера ввода перед началом ожидания остановки
-        // Это важно, если пользователь случайно нажал Enter несколько раз
-        while (reader.ready()) {
-            reader.read()
-        }
+        // Увеличенная пауза (700мс), чтобы предотвратить мгновенную остановку от случайного двойного нажатия
+        Thread.sleep(700)
         
         println(">> ЗАПИСЬ ИДЕТ. Говорите в микрофон!")
         println(">> (Нажмите ENTER чтобы остановить запись)")
         
-        // Блокирующее ожидание следующего Enter
-        reader.readLine()
+        // Ждем следующего нажатия Enter
+        if (scanner.hasNextLine()) {
+            scanner.nextLine()
+        }
         
         println(">> Остановка...")
         recorder.stopRecording()
 
-        // Даем небольшую паузу на финализацию файла
+        // Пауза на финализацию файла
         Thread.sleep(500)
 
         if (!tempWav.exists() || tempWav.length() == 0L) {
