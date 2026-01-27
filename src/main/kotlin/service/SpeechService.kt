@@ -25,33 +25,30 @@ class SpeechService(private val config: VoiceConfig) {
             "-otxt"
         )
         
-        println("DEBUG: Executing Whisper: ${command.joinToString(" ")}")
-
         try {
             val processBuilder = ProcessBuilder(command)
             processBuilder.redirectErrorStream(true) 
             
             val process = processBuilder.start()
             
-            val outputLog = StringBuilder()
-            
+            // Consume output in background to prevent blocking
             val readerThread = Thread {
                 process.inputStream.bufferedReader().forEachLine { 
-                    outputLog.appendLine(it)
+                    // Silent consumption
                 }
             }
             readerThread.start()
 
             val finished = process.waitFor(60, TimeUnit.SECONDS)
-            readerThread.join(1000) // Wait for logs to be consumed
+            readerThread.join(1000)
 
             if (!finished) {
                 process.destroy()
-                return "Error: Transcription timed out.\nLogs:\n$outputLog"
+                return "Error: Transcription timed out."
             }
 
             if (process.exitValue() != 0) {
-                 return "Error: Whisper process failed with code ${process.exitValue()}.\nLogs:\n$outputLog"
+                 return "Error: Whisper process failed with code ${process.exitValue()}"
             }
 
             if (outputTxtFile.exists()) {
@@ -59,7 +56,7 @@ class SpeechService(private val config: VoiceConfig) {
                 outputTxtFile.delete()
                 return text
             } else {
-                return "Error: Output file not created.\nLogs:\n$outputLog"
+                return "Error: Output file not created."
             }
 
         } catch (e: Exception) {
