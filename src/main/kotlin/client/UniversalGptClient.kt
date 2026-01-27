@@ -27,7 +27,7 @@ class UniversalGptClient(
             })
         }
         install(Logging) {
-            level = LogLevel.NONE
+            level = LogLevel.INFO
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 120_000
@@ -59,9 +59,8 @@ class UniversalGptClient(
                     put("temperature", temperature)
                     put("maxTokens", maxTokens.toString())
                 }
-                if (model.supportsJsonMode) {
-                    put("jsonObject", true) // Ensure JSON output if supported
-                }
+                // REMOVED: put("jsonObject", true) - this forced JSON output, causing empty responses in chat mode
+                
                 putJsonArray("messages") {
                     fullHistory.forEach { msg ->
                         addJsonObject {
@@ -72,13 +71,20 @@ class UniversalGptClient(
                 }
             }
 
+            // Uncomment for debugging if needed
+            // println("Request Body: $requestBody")
+
             val response: HttpResponse = client.post("https://llm.api.cloud.yandex.net/foundationModels/v1/completion") {
                 header("Authorization", "Api-Key ${config.apiKey}")
+                // header("x-folder-id", folderId) // Not strictly required if modelUri has it, but good practice sometimes.
                 contentType(ContentType.Application.Json)
                 setBody(requestBody)
             }
 
-            val json = response.body<JsonObject>()
+            val responseBodyText = response.bodyAsText()
+            // println("Response Body: $responseBodyText") // Debugging
+
+            val json = Json.parseToJsonElement(responseBodyText).jsonObject
 
             // Handle Error
             if (response.status != HttpStatusCode.OK) {
@@ -92,7 +98,6 @@ class UniversalGptClient(
             return@runCatching text
 
         } else {
-             // Fallback or other models (omitted for Yandex task)
              throw UnsupportedOperationException("Only Yandex Native supported in this simplified version")
         }
     }.getOrElse { e ->
