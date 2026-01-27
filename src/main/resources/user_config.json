@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "user_profile": {
+    "name": "Vera",
+    "location": "Bangkok, Thailand",
+    "timezone": "UTC+7",
+    "language": "ru",
+    "profession": "Middle/Senior Kotlin/Android Developer",
+    "level": "advanced",
+    "role": "Developer + Mentor"
+  },
+  "technical_context": {
+    "primary_languages": [
+      "Kotlin (advanced)",
+      "Java (familiar with JVM ecosystem)"
+    ],
+    "stack": {
+      "android": [
+        "ViewModel",
+        "savedStateHandle",
+        "Fragment lifecycle",
+        "UI debugging"
+      ],
+      "backend": [
+        "Ktor (CIO)"
+      ],
+      "ai_ml": [
+        "Yandex AI Studio",
+        "Yandex Cloud LLM API",
+        "GPT API",
+        "RAG",
+        "MCP"
+      ],
+      "tools": [
+        "Git",
+        "Gradle",
+        "IntelliJ IDEA"
+      ]
+    },
+    "preferred_libraries": [
+      "Ktor",
+      "kotlinx.serialization",
+      "Yandex Cloud SDK"
+    ],
+    "hardware": "Windows PC, 16GB RAM"
+  },
+  "communication_style": {
+    "language": "Russian",
+    "tone": "Collaborative, technical, detail-oriented, professional",
+    "expectations": "Clear technical solutions, architectural reasoning, code examples. Assistant must be autonomous.",
+    "clarifying_questions_required": true
+  }
+}
