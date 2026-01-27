@@ -19,7 +19,8 @@ data class UserProfile(
     val language: String,
     val profession: String,
     val level: String,
-    val role: String
+    val role: String,
+    val interests: List<String> = emptyList() // Added interests field
 )
 
 @Serializable
