@@ -34,8 +34,15 @@ fun main() = runBlocking {
         append("AI инструменты: ${config.technicalContext.stack.aiMl.joinToString(", ")}. ")
         append("Инструменты: ${config.technicalContext.stack.tools.joinToString(", ")}. ")
         append("\n\nАппаратное обеспечение: ${config.technicalContext.hardware}. ")
+        
+        // Added: Interests section
+        if (config.userProfile.interests.isNotEmpty()) {
+            append("\n\nЛичные интересы пользователя:\n")
+            append(config.userProfile.interests.joinToString("\n") { "- $it" })
+        }
+
         if (config.communicationStyle.clarifyingQuestionsRequired) {
-            append("\nВАЖНО: Перед выполнением сложной задачи задавай минимум 3 уточняющих вопроса.")
+            append("\n\nВАЖНО: Перед выполнением сложной задачи задавай минимум 3 уточняющих вопроса.")
         }
     }
     
