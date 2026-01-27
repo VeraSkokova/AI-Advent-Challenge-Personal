@@ -5,7 +5,8 @@ import model.Message
 import service.AudioRecorder
 import service.SpeechService
 import java.io.File
-import java.util.Scanner
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
@@ -36,7 +37,9 @@ fun main() = runBlocking {
     val client = UniversalGptClient(apiConfig)
     val recorder = AudioRecorder(voiceConfig)
     val speechService = SpeechService(voiceConfig)
-    val scanner = Scanner(System.`in`)
+    
+    // Используем BufferedReader вместо Scanner для более надежного чтения строк
+    val reader = BufferedReader(InputStreamReader(System.`in`))
 
     val history = mutableListOf<Message>()
     val tempWav = File("temp_recording.wav")
@@ -44,9 +47,9 @@ fun main() = runBlocking {
     // 3. Основной цикл
     while (true) {
         println("\n------------------------------------------------")
-        println("Нажмите ENTER, чтобы начать запись (или 'exit'):")
+        println("Нажмите ENTER, чтобы начать запись (или введите 'exit'):")
         
-        val input = scanner.nextLine()
+        val input = reader.readLine() ?: break
         if (input.trim().equals("exit", ignoreCase = true)) {
             break
         }
@@ -55,17 +58,26 @@ fun main() = runBlocking {
         println(">> Инициализация записи...")
         recorder.startRecording(tempWav)
         
-        // Небольшая пауза, чтобы процесс успел запуститься и пользователь не нажал Enter случайно дважды
+        // Пауза, чтобы FFmpeg успел захватить устройство
         Thread.sleep(500)
+        
+        // Очистка буфера ввода перед началом ожидания остановки
+        // Это важно, если пользователь случайно нажал Enter несколько раз
+        while (reader.ready()) {
+            reader.read()
+        }
         
         println(">> ЗАПИСЬ ИДЕТ. Говорите в микрофон!")
         println(">> (Нажмите ENTER чтобы остановить запись)")
         
-        // Ждем нажатия Enter для остановки
-        scanner.nextLine()
+        // Блокирующее ожидание следующего Enter
+        reader.readLine()
         
         println(">> Остановка...")
         recorder.stopRecording()
+
+        // Даем небольшую паузу на финализацию файла
+        Thread.sleep(500)
 
         if (!tempWav.exists() || tempWav.length() == 0L) {
             println("Ошибка: Файл записи пуст. Возможно, микрофон не работает или запись была слишком короткой.")
