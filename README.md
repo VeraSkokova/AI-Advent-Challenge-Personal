@@ -1,58 +1,68 @@
-# Day 30: Персональный AI-агент
+# День 31: Голосовой AI-агент
 
-Этот проект реализует персонализированного AI-ассистента в рамках **AI Advent Challenge**. Агент работает как консольное Kotlin-приложение и использует **Yandex Cloud LLM API**.
+Реализация голосового интерфейса для персонализированного AI-ассистента в рамках **AI Advent Challenge**.
+Приложение записывает голос с микрофона, переводит его в текст с помощью локальной модели Whisper и отправляет запрос в YandexGPT, используя профиль пользователя.
 
 ## Возможности
+- **Push-to-talk**: Управление записью через клавишу Enter (старт/стоп).
+- **Speech-to-Text (STT)**: Локальное распознавание речи через [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (бесплатно, приватно, без интернета).
+- **Персонализация**: Агент использует конфиг `user_config.json` (стек, интересы, стиль общения) для генерации системного промпта (наследие Day 30).
+- **LLM**: Интеграция с Yandex Cloud LLM API.
+- **Audio Recording**: Запись WAV-файла через FFmpeg (16kHz, mono).
 
-- **Персонализированный контекст**: Агент загружает конфигурацию пользователя из `user_config.json`, которая включает:
-    - **Профиль пользователя**: Роль, уровень опыта и стиль общения.
-    - **Технический стек**: Предпочитаемые языки (Kotlin, Java), фреймворки (Android ViewModel, Ktor) и инструменты.
-    - **Интересы**: Специфические профессиональные и личные интересы для адаптации диалога.
-- **Динамический системный промпт**: Системная инструкция генерируется во время запуска на основе загруженной конфигурации, благодаря чему AI ведёт себя как "Личный ментор".
-- **Безопасная конфигурация**: API-ключи и ID каталога загружаются из `local.properties` (не попадает в коммиты) или переменных окружения.
-- **Универсальная архитектура клиента**: Используется гибкий `UniversalGptClient` (адаптированный из Day 10), построенный на Ktor (движок CIO) и Kotlinx Serialization.
+## Требования для Windows
 
-## Установка и запуск
+### 1. Программное обеспечение
+1.  **FFmpeg**: 
+    - Скачать `ffmpeg-release-essentials.zip` с [gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
+    - Распаковать, путь к `ffmpeg.exe` прописать в конфиге.
+2.  **Whisper.cpp**:
+    - Скачать `whisper-bin-x64.zip` из [релизов whisper.cpp](https://github.com/ggerganov/whisper.cpp/releases).
+    - Используется файл `whisper-cli.exe`.
+3.  **Модель Whisper**:
+    - Скачать файл модели `.bin` (рекомендуется `ggml-small.bin` для русского языка) с [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
 
-1.  **Склонируйте репозиторий** и переключитесь на ветку `day30`.
-2.  **Настройте API доступы**:
-    Создайте файл `local.properties` в корневой директории:
-    ```properties
-    YANDEX_API_KEY=ваш_api_ключ
-    YANDEX_FOLDER_ID=ваш_id_каталога
-    ```
-    Альтернативно можно задать переменные окружения: `YANDEX_API_KEY` и `YANDEX_FOLDER_ID`.
-3.  **Запустите приложение**:
-    ```bash
-    ./gradlew run
-    ```
+### 2. Конфигурация (local.properties)
+Создайте файл `local.properties` в корне проекта. Укажите ваши ключи и пути:
+
+```properties
+# Yandex Cloud (Day 30+)
+YANDEX_API_KEY=ваш_api_ключ
+YANDEX_FOLDER_ID=ваш_folder_id
+
+# Пути к инструментам (используйте двойные слэши \\ для Windows путей)
+ffmpeg.path=C:\\Tools\\ffmpeg\\bin\\ffmpeg.exe
+whisper.main.path=C:\\Tools\\whisper\\whisper-cli.exe
+whisper.model.path=C:\\Tools\\whisper\\ggml-small.bin
+
+# Ваше устройство записи
+# Чтобы узнать имя: ffmpeg -list_devices true -f dshow -i dummy
+# Копируйте имя из секции "DirectShow audio devices"
+audio.input.device=audio=Microphone (Realtek(R) Audio)
+```
+
+## Запуск
+
+В терминале (PowerShell/CMD):
+```bash
+./gradlew run
+```
+
+### Инструкция пользователя:
+1. Запустите приложение.
+2. Когда появится приглашение, нажмите **Enter**.
+3. Дождитесь сообщения `>> ЗАПИСЬ ИДЕТ` и говорите.
+4. Нажмите **Enter** еще раз, чтобы остановить запись.
+5. Программа распознает речь и выведет ответ ассистента.
+6. Введите `exit` вместо нажатия Enter, чтобы выйти.
 
 ## Структура проекта
-
-- `src/main/resources/user_config.json`: Источник правды для личности агента.
-- `src/main/kotlin/config/ApiConfig.kt`: Отвечает за безопасную загрузку учетных данных.
-- `src/main/kotlin/client/UniversalGptClient.kt`: Сетевой слой для взаимодействия с YandexGPT.
-- `src/main/kotlin/model/`: Data classes для конфигурации и моделей API.
-- `src/main/kotlin/Main.kt`: Точка входа; инициализирует конфиг, собирает промпт и запускает REPL-цикл.
-
-## Пример взаимодействия
-
-```
-Loaded configuration for user: Vera
-
---- Personal AI Agent Started ---
-System Prompt initialized with user profile context.
-Type 'exit' to quit.
-
-> Какие у меня основные интересы?
-AI: Исходя из вашего профиля, ваши интересы включают:
-- Разработка на Kotlin и Android
-- AI/ML инжиниринг (RAG, MCP, Локальные модели)
-- Тренировки на воздушных полотнах (aerial silks)
-- Музыкальные визуализации
-```
-
-## Выводы
-- **Персонализация через конфигурацию**: Вынос "личности" агента в JSON-файл делает систему модульной и легкой для обновления без изменения кода.
-- **Безопасное управление секретами**: Применен подход с `local.properties`, стандартный для Android-разработки, для защиты ключей.
-- **Промпт-инжиниринг**: Внедрение структурированных данных (стек, интересы) непосредственно в системный промпт значительно повышает релевантность ответов AI.
+- `src/main/resources/user_config.json`: Настройки личности агента и интересов.
+- `src/main/kotlin/config/`:
+    - `VoiceConfig.kt`: Настройки путей к FFmpeg/Whisper.
+    - `ApiConfig.kt`: Настройки API ключей.
+- `src/main/kotlin/service/`:
+    - `AudioRecorder.kt`: Обертка над FFmpeg.
+    - `SpeechService.kt`: Обертка над Whisper.
+- `src/main/kotlin/client/UniversalGptClient.kt`: Клиент к YandexGPT.
+- `src/main/kotlin/Main.kt`: Основной цикл (Voice REPL).
