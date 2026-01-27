@@ -22,7 +22,7 @@ fun main() = runBlocking {
         VoiceConfig.load()
     } catch (e: Exception) {
         println("Ошибка загрузки Voice config: ${e.message}")
-        println("Убедитесь, что local.properties содержит пути к ffmpeg и whisper.")
+        println("Убедитесь, что local.properties настроен корректно.")
         return@runBlocking
     }
 
@@ -43,41 +43,51 @@ fun main() = runBlocking {
 
     // 3. Основной цикл
     while (true) {
-        println("\nНажмите ENTER, чтобы начать запись (или введите 'exit' для выхода):")
+        println("\n------------------------------------------------")
+        println("Нажмите ENTER, чтобы начать запись (или 'exit'):")
+        
         val input = scanner.nextLine()
         if (input.trim().equals("exit", ignoreCase = true)) {
             break
         }
 
         // --- Запись ---
-        println(">> Запись идет... Нажмите ENTER для остановки.")
+        println(">> Инициализация записи...")
         recorder.startRecording(tempWav)
         
-        // Ждем нажатия Enter
+        // Небольшая пауза, чтобы процесс успел запуститься и пользователь не нажал Enter случайно дважды
+        Thread.sleep(500)
+        
+        println(">> ЗАПИСЬ ИДЕТ. Говорите в микрофон!")
+        println(">> (Нажмите ENTER чтобы остановить запись)")
+        
+        // Ждем нажатия Enter для остановки
         scanner.nextLine()
         
+        println(">> Остановка...")
         recorder.stopRecording()
 
         if (!tempWav.exists() || tempWav.length() == 0L) {
-            println("Ошибка: Файл записи не создан или пуст.")
+            println("Ошибка: Файл записи пуст. Возможно, микрофон не работает или запись была слишком короткой.")
             continue
         }
 
         // --- Распознавание (STT) ---
-        println(">> Распознавание...")
+        println(">> Распознавание (Whisper)...")
         val userText = speechService.transcribe(tempWav)
         
         if (userText.startsWith("Error")) {
+            println("Ошибка распознавания:")
             println(userText)
             continue
         }
 
-        if (userText.isBlank()) {
-            println("Тишина (текст не распознан).")
+        if (userText.isBlank() || userText.trim() == "[музыка]") {
+            println("Тишина или шум (текст не распознан). Попробуйте еще раз.")
             continue
         }
 
-        println("Вы сказали: $userText")
+        println("Вы сказали: \"$userText\"")
 
         // --- Генерация ответа (LLM) ---
         println(">> Ассистент думает...")
@@ -85,7 +95,7 @@ fun main() = runBlocking {
 
         val responseText = client.sendMessage(
             messages = history,
-            systemPrompt = "Ты — голосовой помощник. Отвечай кратко, емко и дружелюбно. Не используй сложное форматирование, так как текст будет озвучен.",
+            systemPrompt = "Ты — голосовой помощник. Отвечай кратко (1-2 предложения), дружелюбно и по делу. Не используй markdown-разметку, так как текст предназначен для озвучки.",
             maxTokens = 500
         )
 
