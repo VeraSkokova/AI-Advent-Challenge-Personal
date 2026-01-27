@@ -23,15 +23,15 @@ data class VoiceConfig(
                 ?: props.getProperty("ffmpeg.path")
                 ?: "ffmpeg" // Default to PATH
 
+            // Update default to whisper-cli.exe as main.exe is deprecated
             val whisperPath = System.getenv("WHISPER_MAIN_PATH")
                 ?: props.getProperty("whisper.main.path")
-                ?: "main.exe" // Default relative or in PATH
+                ?: "whisper-cli.exe" 
 
             val whisperModelPath = System.getenv("WHISPER_MODEL_PATH")
                 ?: props.getProperty("whisper.model.path")
                 ?: "ggml-model.bin" // Default relative
 
-            // Default to a common Windows default or let user specify
             val audioInputDevice = System.getenv("AUDIO_INPUT_DEVICE")
                 ?: props.getProperty("audio.input.device")
                 ?: "audio=Microphone (Realtek(R) Audio)" 
