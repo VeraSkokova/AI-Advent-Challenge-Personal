@@ -1,4 +1,5 @@
-import client.YandexClient
+import client.UniversalGptClient
+import config.ApiConfig
 import kotlinx.serialization.json.Json
 import model.Message
 import model.UserConfig
@@ -38,16 +39,15 @@ fun main() = runBlocking {
         }
     }
     
-    // 3. Initialize Client
-    val folderId = System.getenv("YANDEX_FOLDER_ID")
-    val iamToken = System.getenv("YANDEX_IAM_TOKEN")
-    
-    if (folderId.isNullOrEmpty() || iamToken.isNullOrEmpty()) {
-        println("Error: YANDEX_FOLDER_ID or YANDEX_IAM_TOKEN environment variables not set.")
+    // 3. Initialize Client with ApiConfig
+    val apiConfig = try {
+        ApiConfig.load()
+    } catch (e: Exception) {
+        println("Configuration Error: ${e.message}")
         return@runBlocking
     }
     
-    val client = YandexClient(folderId, iamToken)
+    val client = UniversalGptClient(apiConfig)
     val chatHistory = mutableListOf<Message>()
     
     println("\n--- Personal AI Agent Started ---")
@@ -68,7 +68,7 @@ fun main() = runBlocking {
         chatHistory.add(Message("user", userInput))
         
         print("AI: Thinking...")
-        val responseText = client.generateResponse(
+        val responseText = client.sendMessage(
             messages = chatHistory,
             systemPrompt = systemPrompt
         )
