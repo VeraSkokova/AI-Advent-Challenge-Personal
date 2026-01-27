@@ -36,8 +36,6 @@ fun main() = runBlocking {
     val client = UniversalGptClient(apiConfig)
     val recorder = AudioRecorder(voiceConfig)
     val speechService = SpeechService(voiceConfig)
-    
-    // Возвращаем Scanner, так как BufferedReader иногда требует двойного нажатия на Windows
     val scanner = Scanner(System.`in`)
 
     val history = mutableListOf<Message>()
@@ -48,9 +46,7 @@ fun main() = runBlocking {
         println("\n------------------------------------------------")
         println("Нажмите ENTER, чтобы начать запись (или введите 'exit'):")
         
-        if (!scanner.hasNextLine()) break
         val input = scanner.nextLine()
-        
         if (input.trim().equals("exit", ignoreCase = true)) {
             break
         }
@@ -59,22 +55,17 @@ fun main() = runBlocking {
         println(">> Инициализация записи...")
         recorder.startRecording(tempWav)
         
-        // Увеличенная пауза (700мс), чтобы предотвратить мгновенную остановку от случайного двойного нажатия
-        Thread.sleep(700)
+        // Небольшая пауза, чтобы процесс успел запуститься и пользователь не нажал Enter случайно дважды
+        Thread.sleep(500)
         
         println(">> ЗАПИСЬ ИДЕТ. Говорите в микрофон!")
         println(">> (Нажмите ENTER чтобы остановить запись)")
         
-        // Ждем следующего нажатия Enter
-        if (scanner.hasNextLine()) {
-            scanner.nextLine()
-        }
+        // Ждем нажатия Enter для остановки
+        scanner.nextLine()
         
         println(">> Остановка...")
         recorder.stopRecording()
-
-        // Пауза на финализацию файла
-        Thread.sleep(500)
 
         if (!tempWav.exists() || tempWav.length() == 0L) {
             println("Ошибка: Файл записи пуст. Возможно, микрофон не работает или запись была слишком короткой.")
