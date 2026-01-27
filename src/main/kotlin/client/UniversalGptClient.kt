@@ -27,7 +27,7 @@ class UniversalGptClient(
             })
         }
         install(Logging) {
-            level = LogLevel.INFO
+            level = LogLevel.NONE
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 120_000
