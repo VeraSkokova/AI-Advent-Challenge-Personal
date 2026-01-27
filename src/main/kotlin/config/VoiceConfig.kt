@@ -7,7 +7,8 @@ import java.util.Properties
 data class VoiceConfig(
     val ffmpegPath: String,
     val whisperPath: String,
-    val whisperModelPath: String
+    val whisperModelPath: String,
+    val audioInputDevice: String
 ) {
     companion object {
         fun load(fileName: String = "local.properties"): VoiceConfig {
@@ -30,7 +31,12 @@ data class VoiceConfig(
                 ?: props.getProperty("whisper.model.path")
                 ?: "ggml-model.bin" // Default relative
 
-            return VoiceConfig(ffmpegPath, whisperPath, whisperModelPath)
+            // Default to a common Windows default or let user specify
+            val audioInputDevice = System.getenv("AUDIO_INPUT_DEVICE")
+                ?: props.getProperty("audio.input.device")
+                ?: "audio=Microphone (Realtek(R) Audio)" 
+
+            return VoiceConfig(ffmpegPath, whisperPath, whisperModelPath, audioInputDevice)
         }
     }
 }
