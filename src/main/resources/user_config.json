@@ -7,7 +7,12 @@
     "language": "ru",
     "profession": "Middle/Senior Kotlin/Android Developer",
     "level": "advanced",
-    "role": "Developer + Mentor"
+    "role": "Developer + Mentor",
+    "interests": [
+      "Воздушные полотна (aerial silk) — тренировки, соревнования",
+      "Музыкальные визуализации 'год в обзоре' (Spotify, Yandex Music)",
+      "Косметика и уход (исследование и выбор шампуней, кондиционеров)"
+    ]
   },
   "technical_context": {
     "primary_languages": [
