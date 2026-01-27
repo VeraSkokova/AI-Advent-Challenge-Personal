@@ -1,41 +1,41 @@
-# Day 30: Personal AI Agent
+# Day 30: Персональный AI-агент
 
-This project implements a personalized AI assistant as part of the **AI Advent Challenge**. The agent runs as a Kotlin console application and uses the **Yandex Cloud LLM API**.
+Этот проект реализует персонализированного AI-ассистента в рамках **AI Advent Challenge**. Агент работает как консольное Kotlin-приложение и использует **Yandex Cloud LLM API**.
 
-## Features
+## Возможности
 
-- **Personalized Context**: The agent loads a user configuration from `user_config.json`, which includes:
-    - **User Profile**: Role, experience level, and tone of voice.
-    - **Technical Stack**: Preferred languages (Kotlin, Java), frameworks (Android ViewModel, Ktor), and tools.
-    - **Interests**: Specific professional and personal interests to tailor conversations.
-- **Dynamic System Prompt**: The system prompt is generated at runtime based on the loaded configuration, ensuring the AI behaves as a "Personal Mentor".
-- **Secure Configuration**: API keys and Folder IDs are loaded from `local.properties` (not committed) or environment variables.
-- **Universal Client Architecture**: Uses a flexible `UniversalGptClient` (adapted from Day 10) built with Ktor (CIO engine) and Kotlinx Serialization.
+- **Персонализированный контекст**: Агент загружает конфигурацию пользователя из `user_config.json`, которая включает:
+    - **Профиль пользователя**: Роль, уровень опыта и стиль общения.
+    - **Технический стек**: Предпочитаемые языки (Kotlin, Java), фреймворки (Android ViewModel, Ktor) и инструменты.
+    - **Интересы**: Специфические профессиональные и личные интересы для адаптации диалога.
+- **Динамический системный промпт**: Системная инструкция генерируется во время запуска на основе загруженной конфигурации, благодаря чему AI ведёт себя как "Личный ментор".
+- **Безопасная конфигурация**: API-ключи и ID каталога загружаются из `local.properties` (не попадает в коммиты) или переменных окружения.
+- **Универсальная архитектура клиента**: Используется гибкий `UniversalGptClient` (адаптированный из Day 10), построенный на Ktor (движок CIO) и Kotlinx Serialization.
 
-## Setup
+## Установка и запуск
 
-1.  **Clone the repository** and switch to the `day30` branch.
-2.  **Configure API Credentials**:
-    Create a `local.properties` file in the root directory:
+1.  **Склонируйте репозиторий** и переключитесь на ветку `day30`.
+2.  **Настройте API доступы**:
+    Создайте файл `local.properties` в корневой директории:
     ```properties
-    YANDEX_API_KEY=your_api_key
-    YANDEX_FOLDER_ID=your_folder_id
+    YANDEX_API_KEY=ваш_api_ключ
+    YANDEX_FOLDER_ID=ваш_id_каталога
     ```
-    Alternatively, set environment variables: `YANDEX_API_KEY` and `YANDEX_FOLDER_ID`.
-3.  **Run the Application**:
+    Альтернативно можно задать переменные окружения: `YANDEX_API_KEY` и `YANDEX_FOLDER_ID`.
+3.  **Запустите приложение**:
     ```bash
     ./gradlew run
     ```
 
-## Project Structure
+## Структура проекта
 
-- `src/main/resources/user_config.json`: The source of truth for the agent's personality.
-- `src/main/kotlin/config/ApiConfig.kt`: Handles secure credential loading.
-- `src/main/kotlin/client/UniversalGptClient.kt`: Network layer for interacting with YandexGPT.
-- `src/main/kotlin/model/`: Data classes for configuration and API models.
-- `src/main/kotlin/Main.kt`: Entry point; initializes the config, builds the prompt, and runs the REPL loop.
+- `src/main/resources/user_config.json`: Источник правды для личности агента.
+- `src/main/kotlin/config/ApiConfig.kt`: Отвечает за безопасную загрузку учетных данных.
+- `src/main/kotlin/client/UniversalGptClient.kt`: Сетевой слой для взаимодействия с YandexGPT.
+- `src/main/kotlin/model/`: Data classes для конфигурации и моделей API.
+- `src/main/kotlin/Main.kt`: Точка входа; инициализирует конфиг, собирает промпт и запускает REPL-цикл.
 
-## Example Interaction
+## Пример взаимодействия
 
 ```
 Loaded configuration for user: Vera
@@ -44,15 +44,15 @@ Loaded configuration for user: Vera
 System Prompt initialized with user profile context.
 Type 'exit' to quit.
 
-> What are my main interests?
-AI: Based on your profile, your interests include:
-- Kotlin and Android Development
-- AI/ML Engineering (RAG, MCP, Local Models)
-- Aerial silks training
-- Music visualizations
+> Какие у меня основные интересы?
+AI: Исходя из вашего профиля, ваши интересы включают:
+- Разработка на Kotlin и Android
+- AI/ML инжиниринг (RAG, MCP, Локальные модели)
+- Тренировки на воздушных полотнах (aerial silks)
+- Музыкальные визуализации
 ```
 
-## Learnings
-- **Personalization via Configuration**: Moving the "identity" of the agent into a JSON file makes the system modular and easy to update without code changes.
-- **Secure Secrets Management**: Adopted a `local.properties` approach standard in Android development for keeping keys safe.
-- **Prompt Engineering**: Injecting structured data (stack, interests) directly into the system prompt significantly improves the relevance of the AI's responses.
+## Выводы
+- **Персонализация через конфигурацию**: Вынос "личности" агента в JSON-файл делает систему модульной и легкой для обновления без изменения кода.
+- **Безопасное управление секретами**: Применен подход с `local.properties`, стандартный для Android-разработки, для защиты ключей.
+- **Промпт-инжиниринг**: Внедрение структурированных данных (стек, интересы) непосредственно в системный промпт значительно повышает релевантность ответов AI.
