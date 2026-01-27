@@ -1,91 +1,100 @@
 import client.UniversalGptClient
 import config.ApiConfig
-import kotlinx.serialization.json.Json
+import config.VoiceConfig
 import model.Message
-import model.UserConfig
+import service.AudioRecorder
+import service.SpeechService
 import java.io.File
+import java.util.Scanner
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
-    // 1. Load Config
-    val configFile = File("src/main/resources/user_config.json")
-    if (!configFile.exists()) {
-        println("Error: user_config.json not found!")
-        return@runBlocking
-    }
-    
-    val json = Json { ignoreUnknownKeys = true }
-    val configText = configFile.readText()
-    val config = json.decodeFromString<UserConfig>(configText)
-    
-    println("Loaded configuration for user: ${config.userProfile.name}")
-    
-    // 2. Build System Prompt
-    val systemPrompt = buildString {
-        append("Ты — персональный AI-ассистент для ${config.userProfile.name}. ")
-        append("Она — ${config.userProfile.role}, уровень: ${config.userProfile.level}. ")
-        append("Основной язык общения: ${config.communicationStyle.language}. ")
-        append("Тон общения: ${config.communicationStyle.tone}. ")
-        append("Ожидания пользователя: ${config.communicationStyle.expectations}. ")
-        append("\n\nТехнический контекст:\n")
-        append("Языки: ${config.technicalContext.primaryLanguages.joinToString(", ")}. ")
-        append("Стек Android: ${config.technicalContext.stack.android.joinToString(", ")}. ")
-        append("Backend: ${config.technicalContext.stack.backend.joinToString(", ")}. ")
-        append("AI инструменты: ${config.technicalContext.stack.aiMl.joinToString(", ")}. ")
-        append("Инструменты: ${config.technicalContext.stack.tools.joinToString(", ")}. ")
-        append("\n\nАппаратное обеспечение: ${config.technicalContext.hardware}. ")
-        
-        // Added: Interests section
-        if (config.userProfile.interests.isNotEmpty()) {
-            append("\n\nЛичные интересы пользователя:\n")
-            append(config.userProfile.interests.joinToString("\n") { "- $it" })
-        }
-
-        if (config.communicationStyle.clarifyingQuestionsRequired) {
-            append("\n\nВАЖНО: Перед выполнением сложной задачи задавай минимум 3 уточняющих вопроса.")
-        }
-    }
-    
-    // 3. Initialize Client with ApiConfig
+    // 1. Загрузка конфигурации
+    println("Загрузка конфигурации...")
     val apiConfig = try {
         ApiConfig.load()
     } catch (e: Exception) {
-        println("Configuration Error: ${e.message}")
+        println("Ошибка загрузки API config: ${e.message}")
         return@runBlocking
     }
     
+    val voiceConfig = try {
+        VoiceConfig.load()
+    } catch (e: Exception) {
+        println("Ошибка загрузки Voice config: ${e.message}")
+        println("Убедитесь, что local.properties содержит пути к ffmpeg и whisper.")
+        return@runBlocking
+    }
+
+    println("=== Day 31: Голосовой агент ===")
+    println("FFmpeg: ${voiceConfig.ffmpegPath}")
+    println("Whisper: ${voiceConfig.whisperPath}")
+    println("Device: ${voiceConfig.audioInputDevice}")
+    println("===============================")
+
+    // 2. Инициализация сервисов
     val client = UniversalGptClient(apiConfig)
-    val chatHistory = mutableListOf<Message>()
-    
-    println("\n--- Personal AI Agent Started ---")
-    println("System Prompt initialized with user profile context.")
-    println("Type 'exit' to quit.\n")
-    
-    // 4. REPL Loop
+    val recorder = AudioRecorder(voiceConfig)
+    val speechService = SpeechService(voiceConfig)
+    val scanner = Scanner(System.`in`)
+
+    val history = mutableListOf<Message>()
+    val tempWav = File("temp_recording.wav")
+
+    // 3. Основной цикл
     while (true) {
-        print("> ")
-        val userInput = readlnOrNull() ?: break
-        
-        if (userInput.lowercase() == "exit") {
+        println("\nНажмите ENTER, чтобы начать запись (или введите 'exit' для выхода):")
+        val input = scanner.nextLine()
+        if (input.trim().equals("exit", ignoreCase = true)) {
             break
         }
+
+        // --- Запись ---
+        println(">> Запись идет... Нажмите ENTER для остановки.")
+        recorder.startRecording(tempWav)
         
-        if (userInput.isBlank()) continue
+        // Ждем нажатия Enter
+        scanner.nextLine()
         
-        chatHistory.add(Message("user", userInput))
+        recorder.stopRecording()
+
+        if (!tempWav.exists() || tempWav.length() == 0L) {
+            println("Ошибка: Файл записи не создан или пуст.")
+            continue
+        }
+
+        // --- Распознавание (STT) ---
+        println(">> Распознавание...")
+        val userText = speechService.transcribe(tempWav)
         
-        print("AI: Thinking...")
+        if (userText.startsWith("Error")) {
+            println(userText)
+            continue
+        }
+
+        if (userText.isBlank()) {
+            println("Тишина (текст не распознан).")
+            continue
+        }
+
+        println("Вы сказали: $userText")
+
+        // --- Генерация ответа (LLM) ---
+        println(">> Ассистент думает...")
+        history.add(Message("user", userText))
+
         val responseText = client.sendMessage(
-            messages = chatHistory,
-            systemPrompt = systemPrompt
+            messages = history,
+            systemPrompt = "Ты — голосовой помощник. Отвечай кратко, емко и дружелюбно. Не используй сложное форматирование, так как текст будет озвучен.",
+            maxTokens = 500
         )
-        
-        print("\r") 
-        println("AI: $responseText")
-        
-        chatHistory.add(Message("assistant", responseText))
+
+        println("Ассистент: $responseText")
+        history.add(Message("assistant", responseText))
     }
-    
+
+    // Очистка
+    if (tempWav.exists()) tempWav.delete()
     client.close()
-    println("Goodbye!")
+    println("Программа завершена.")
 }
