@@ -3,12 +3,12 @@ package infra.rag
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.util.UUID
 
 class Indexer(
     private val embeddingClient: YandexEmbeddingClient
 ) {
     private val json = Json { prettyPrint = true }
+    private val chunker = TextChunker()
 
     suspend fun indexDirectory(path: String): Int {
         val dir = File(path)
@@ -25,21 +25,22 @@ class Indexer(
         files.forEach { file ->
             println("  📄 Processing ${file.name}...")
             val content = file.readText()
-            // Simple split by double newline (paragraphs)
-            val parts = content.split("\n\n").filter { it.isNotBlank() }
             
-            parts.forEach { part ->
-                val embedding = embeddingClient.getEmbedding(part)
+            // Use robust chunking logic
+            val fileChunks = chunker.chunkDocument(file.name, content)
+            println("     -> Split into ${fileChunks.size} chunks")
+
+            fileChunks.forEach { chunk ->
+                // Generate embedding for each chunk
+                val embedding = embeddingClient.getEmbedding(chunk.content)
                 if (embedding.isNotEmpty()) {
-                    chunks.add(Chunk(
-                        id = UUID.randomUUID().toString(),
-                        documentId = file.name,
-                        content = part.trim(),
-                        embedding = embedding
-                    ))
+                    chunks.add(chunk.copy(embedding = embedding))
+                } else {
+                    println("     ⚠️ Failed to embed chunk: ${chunk.id}")
                 }
+                
                 // Rate limit handling (naive delay)
-                kotlinx.coroutines.delay(500)
+                kotlinx.coroutines.delay(200) 
             }
         }
 
