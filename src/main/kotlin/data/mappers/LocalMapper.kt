@@ -10,7 +10,8 @@ import data.dto.local.LocalMessage
 
 object LocalMapper {
     fun toRequest(context: ConversationContext, modelName: String): LocalChatRequest {
-        val systemPrompt = PromptFactory.createSystemPrompt(context.userPreferences)
+        // Pass capabilities from context to factory
+        val systemPrompt = PromptFactory.createSystemPrompt(context.userPreferences, context.capabilities)
         
         val messages = mutableListOf<LocalMessage>()
         
