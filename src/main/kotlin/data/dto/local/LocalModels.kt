@@ -2,22 +2,20 @@ package data.dto.local
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
 @Serializable
-data class LocalCompletionRequest(
+data class LocalChatRequest(
     val model: String,
-    val prompt: String,
+    val messages: List<LocalMessage>,
     val stream: Boolean = false
 )
 
 @Serializable
-data class LocalCompletionResponse(
-    @SerialName("response") val response: String? = null,
-    @SerialName("done") val done: Boolean? = null,
-    @SerialName("context") val context: List<Int>? = null,
-    // Add Ollama chat specific fields just in case the endpoint is /api/chat
-    @SerialName("message") val message: LocalMessage? = null
+data class LocalChatResponse(
+    val model: String? = null,
+    val created_at: String? = null,
+    val message: LocalMessage? = null,
+    val done: Boolean? = null
 )
 
 @Serializable
