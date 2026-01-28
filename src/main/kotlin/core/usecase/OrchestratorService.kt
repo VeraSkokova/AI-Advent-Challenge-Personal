@@ -27,24 +27,21 @@ class OrchestratorService(
         isExpertMode: Boolean = false,
         isPrivacyMode: Boolean = false
     ): Message {
-        // 1. Save user message
         val userMessage = Message(Role.USER, input)
         messages.add(userMessage)
 
-        // 2. Load context
         val profile = userProfileRepository.loadProfile()
         
-        // Define capabilities for system prompt
+        // Pass MCP tools into system prompt (capabilities) so LLM knows about them.
         val capabilities = mutableListOf(
             "Access to RAG Knowledge Base (documentation)",
             "Privacy Mode (Local LLM only)",
             "Expert Mode (Parallel Cloud + Local analysis)"
         )
         
-        // Add dynamic MCP tools
         val mcpTools = mcpService.getAvailableTools()
         if (mcpTools.isNotEmpty()) {
-            capabilities.add("MCP Tools Available:")
+            capabilities.add("MCP Tools (You can call these by outputting JSON: {\"tool\": \"name\", \"params\": {...}}):")
             mcpTools.forEach { tool ->
                 capabilities.add("  - ${tool.name}: ${tool.description} (params: ${tool.parameters.joinToString()})")
             }
@@ -52,59 +49,41 @@ class OrchestratorService(
         
         val context = ConversationContext(messages, profile, capabilities)
 
-        // 3. Expert Mode: Run Cloud and Local in parallel
         if (isExpertMode) {
             return coroutineScope {
                 val cloudDeferred = async { safeCallCloud(context) }
                 val localDeferred = async { safeCallLocal(context) }
-
-                val cloudResponse = cloudDeferred.await()
-                val localResponse = localDeferred.await()
-
-                val combinedContent = """
-                    📊 **Expert Mode Analysis**
-                    
-                    ☁️ **Cloud Perspective:**
-                    ${cloudResponse.content}
-                    
-                    🏠 **Local Perspective:**
-                    ${localResponse.content}
-                """.trimIndent()
-                
-                val result = Message(Role.ASSISTANT, combinedContent)
+                val combined = "📊 **Expert Mode**\n\n☁️ **Cloud:**\n${cloudDeferred.await().content}\n\n🏠 **Local:**\n${localDeferred.await().content}"
+                val result = Message(Role.ASSISTANT, combined)
                 messages.add(result)
                 result
             }
         }
 
-        // 4. Determine strategy via Router
         val toolType = router.determineTool(input, forcePrivacy = isPrivacyMode)
 
-        // 5. Execute Strategy
-        val response = when (toolType) {
-            ToolType.LOCAL_LLM -> {
+        // If Router suggests MCP or Local/Cloud LLM, we let the LLM generate the response.
+        // If the LLM generates a JSON tool call, we catch it and execute it.
+        // This follows the pattern: LLM (with tools in prompt) -> JSON -> Execute -> Result -> LLM (optional) or Return
+        
+        val response = if (toolType == ToolType.RAG) {
+            ragService.searchAndAnswer(input)
+        } else {
+            // Default path: Ask LLM (Local or Cloud)
+            val initialResponse = if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
                 safeCallLocal(context)
+            } else {
+                safeCallCloud(context)
             }
-            ToolType.RAG -> {
-                ragService.searchAndAnswer(input)
-            }
-            ToolType.MCP -> {
-                // LLM-based translation of Natural Language -> JSON Tool Call
-                handleMcpCall(input, mcpTools, isPrivacyMode, context)
-            }
-            ToolType.CLOUD_LLM -> {
-                try {
-                    if (llmService.isAvailable()) {
-                        llmService.generateResponse(context)
-                    } else {
-                        println("⚠️ Cloud LLM unavailable (config check), falling back to Local")
-                        safeCallLocal(context)
-                    }
-                } catch (e: Exception) {
-                    println("⚠️ Cloud LLM error: ${e.message}, falling back to Local")
-                    e.printStackTrace()
-                    safeCallLocal(context)
-                }
+            
+            // Check if response is a tool call
+            if (isToolCall(initialResponse.content)) {
+                val toolResult = mcpService.executeTool(initialResponse.content)
+                // Optionally feed result back to LLM, but for now just return the tool output
+                // or a simple "Done: <output>"
+                toolResult
+            } else {
+                initialResponse
             }
         }
 
@@ -112,60 +91,16 @@ class OrchestratorService(
         return response
     }
 
-    private suspend fun handleMcpCall(
-        input: String, 
-        tools: List<core.ports.ToolInfo>, 
-        isPrivacyMode: Boolean,
-        originalContext: ConversationContext
-    ): Message {
-        // Construct a specific prompt for tool resolution
-        val toolPrompt = """
-            User Request: "$input"
-            
-            AVAILABLE TOOLS:
-            ${tools.joinToString("\n") { "- ${it.name}: ${it.description} (params: ${it.parameters})" }}
-            
-            INSTRUCTION:
-            Based on the user request and available tools, output a JSON object to execute the tool.
-            Format: {"tool": "tool_name", "params": {"param1": "value1"}}
-            
-            Example for 'What is git status?':
-            {"tool": "git_status", "params": {}}
-            
-            Example for 'Read file src/main.kt':
-            {"tool": "read_file", "params": {"path": "src/main.kt"}}
-            
-            If no tool fits, output {"error": "no_tool_match"}.
-            Output ONLY the JSON string, no markdown formatting.
-        """.trimIndent()
-
-        // Use the appropriate LLM to generate the JSON
-        val tempContext = originalContext.copy(
-            messages = listOf(Message(Role.USER, toolPrompt)) // Isolated context for tool selection
-        )
-
-        val jsonResponse = if (!isPrivacyMode && llmService.isAvailable()) {
-            llmService.generateResponse(tempContext).content
-        } else {
-            localLlmService.generateResponse(tempContext).content
-        }
-
-        val cleanedJson = cleanJson(jsonResponse)
-        println("🔧 Generated Tool Command: $cleanedJson")
-
-        return mcpService.executeTool(cleanedJson)
-    }
-
-    private fun cleanJson(input: String): String {
-        return input.replace("```json", "").replace("```", "").trim()
+    private fun isToolCall(content: String): Boolean {
+        val trimmed = content.trim()
+        return trimmed.startsWith("{") && trimmed.contains("\"tool\"")
     }
 
     private suspend fun safeCallCloud(context: ConversationContext): Message {
         return try {
             llmService.generateResponse(context)
         } catch (e: Exception) {
-            println("⚠️ Error in safeCallCloud: ${e.message}")
-            Message(Role.ASSISTANT, "Cloud Service Error: ${e.message}")
+            Message(Role.ASSISTANT, "Cloud Error: ${e.message}")
         }
     }
 
@@ -177,8 +112,7 @@ class OrchestratorService(
                 Message(Role.ASSISTANT, "Local Service Unavailable")
             }
         } catch (e: Exception) {
-            println("⚠️ Error in safeCallLocal: ${e.message}")
-            Message(Role.ASSISTANT, "Local Service Error: ${e.message}")
+            Message(Role.ASSISTANT, "Local Error: ${e.message}")
         }
     }
 }
