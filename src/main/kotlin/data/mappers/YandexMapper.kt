@@ -11,7 +11,8 @@ import data.dto.yandex.YandexResponse
 
 object YandexMapper {
     fun toRequest(context: ConversationContext, modelUri: String): YandexRequest {
-        val systemPrompt = PromptFactory.createSystemPrompt(context.userPreferences)
+        // Pass capabilities from context to factory
+        val systemPrompt = PromptFactory.createSystemPrompt(context.userPreferences, context.capabilities)
         
         val yandexMessages = mutableListOf<YandexMessage>()
         
