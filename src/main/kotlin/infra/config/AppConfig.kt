@@ -62,8 +62,11 @@ object AppConfig {
     fun printStatus() {
         println("--- Configuration Status ---")
         println("Yandex API Key present: ${yandex.apiKey.isNotBlank()}")
-        println("Yandex Folder ID: ${if (yandex.folderId.isNotBlank()) yandex.folderId else "<not set>"}")
-        println("Yandex Model URI: ${yandex.modelUri}")
+        val maskedFolderId = if (yandex.folderId.isNotBlank()) {
+            if (yandex.folderId.length > 4) "${yandex.folderId.take(4)}****" else "****"
+        } else "<not set>"
+        println("Yandex Folder ID: $maskedFolderId")
+        println("Yandex Model URI: ${yandex.modelUri.replace(yandex.folderId, maskedFolderId)}")
         println("Local Model: ${local.modelName} at ${local.baseUrl}")
         println("----------------------------")
     }
