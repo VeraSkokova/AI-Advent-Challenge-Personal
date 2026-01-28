@@ -28,7 +28,12 @@ object LocalMapper {
     }
 
     fun toMessage(response: LocalChatResponse): Message {
-        val content = response.message?.content ?: "Empty response from Local LLM"
+        val content = if (response.error != null) {
+            "Ollama Error: ${response.error}"
+        } else {
+            response.message?.content ?: "Empty response from Local LLM"
+        }
+        
         return Message(
             role = Role.ASSISTANT,
             content = content
