@@ -3,7 +3,7 @@ package infra.local
 import core.domain.model.ConversationContext
 import core.domain.model.Message
 import core.ports.LocalLlmService
-import data.dto.local.LocalCompletionResponse
+import data.dto.local.LocalChatResponse
 import data.mappers.LocalMapper
 import infra.config.AppConfig
 import io.ktor.client.HttpClient
@@ -39,7 +39,15 @@ class LocalLlmServiceImpl(
         val requestDto = LocalMapper.toRequest(context, config.local.modelName)
         
         try {
-            val response: LocalCompletionResponse = client.post("${config.local.baseUrl}/generate") {
+            // Using /api/chat endpoint which expects "messages"
+            // Base URL example: http://localhost:11434/api
+            val endpoint = if (config.local.baseUrl.endsWith("/")) {
+                "${config.local.baseUrl}chat"
+            } else {
+                "${config.local.baseUrl}/chat"
+            }
+
+            val response: LocalChatResponse = client.post(endpoint) {
                 contentType(ContentType.Application.Json)
                 setBody(requestDto)
             }.body()
@@ -52,7 +60,6 @@ class LocalLlmServiceImpl(
 
     override suspend fun isAvailable(): Boolean {
         return try {
-            // Simple ping check logic could be here, but for now we trust config
             true 
         } catch (e: Exception) {
             false
