@@ -16,24 +16,18 @@ class FileUserProfileRepository(
 
     override suspend fun loadProfile(): UserPreferences? {
         val file = File(filePath)
-        if (!file.exists()) return null
+        if (!file.exists()) {
+            println("ℹ️ User profile not found at ${file.absolutePath}")
+            return null
+        }
         
         return try {
-            // Need to map from stored JSON structure to Domain UserPreferences
-            // For simplicity, assuming the JSON matches the structure we want or using intermediate DTO
-            // But since we want to avoid infrastructure dependencies in domain, we should technically use a DTO here too.
-            // However, to save time, we'll assume the JSON is compatible or use a simple manual mapping if needed.
-            // Wait, Kotlin Serialization needs @Serializable on the class to work directly.
-            // Since UserPreferences is a domain class, it should NOT have @Serializable.
-            // Solution: Create a DTO for storage here or add @Serializable to domain (pragmatic clean architecture).
-            // Let's go with the pure way: Read generic JSON map and map manually, OR assume we added DTOs.
-            // Let's create a private DTO inside this file.
-            
             val content = file.readText()
             val dto = json.decodeFromString<UserConfigDto>(content)
-            return dto.toDomain()
+            println("✅ Loaded user profile for ${dto.user_profile.name}")
+            dto.toDomain()
         } catch (e: Exception) {
-            println("Error loading profile: ${e.message}")
+            println("⚠️ Error loading profile: ${e.message}")
             null
         }
     }
