@@ -80,10 +80,13 @@ class OrchestratorService(
                         llmService.generateResponse(context)
                     } else {
                         // Fallback to Local
+                        println("⚠️ Cloud LLM unavailable (config check), falling back to Local")
                         safeCallLocal(context)
                     }
                 } catch (e: Exception) {
                     // Fallback on error
+                    println("⚠️ Cloud LLM error: ${e.message}, falling back to Local")
+                    e.printStackTrace()
                     safeCallLocal(context)
                 }
             }
@@ -97,6 +100,7 @@ class OrchestratorService(
         return try {
             llmService.generateResponse(context)
         } catch (e: Exception) {
+            println("⚠️ Error in safeCallCloud: ${e.message}")
             Message(Role.ASSISTANT, "Cloud Service Error: ${e.message}")
         }
     }
@@ -109,6 +113,7 @@ class OrchestratorService(
                 Message(Role.ASSISTANT, "Local Service Unavailable")
             }
         } catch (e: Exception) {
+            println("⚠️ Error in safeCallLocal: ${e.message}")
             Message(Role.ASSISTANT, "Local Service Error: ${e.message}")
         }
     }
