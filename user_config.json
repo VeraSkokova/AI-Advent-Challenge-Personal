@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "user_profile": {
+    "name": "Vera",
+    "location": "Bangkok, Thailand",
+    "timezone": "UTC+7",
+    "language": "Russian (Native), English (Advanced)",
+    "profession": "Junior Android Developer",
+    "level": "Junior",
+    "role": "Developer",
+    "interests": [
+      "Kotlin",
+      "Android Development",
+      "AI Agents",
+      "Aerial Silks",
+      "Beauty Products"
+    ]
+  },
+  "technical_context": {
+    "primary_languages": [
+      "Kotlin",
+      "Java"
+    ],
+    "stack": {
+      "android": [
+        "Jetpack Compose",
+        "ViewModel",
+        "Coroutines"
+      ],
+      "backend": [
+        "Ktor"
+      ],
+      "ai_ml": [
+        "YandexGPT",
+        "Ollama"
+      ],
+      "tools": [
+        "Git",
+        "IntelliJ IDEA",
+        "Gradle"
+      ]
+    },
+    "preferred_libraries": [
+      "Koin",
+      "Retrofit",
+      "Ktor Client"
+    ],
+    "hardware": "Laptop with limited GPU (using small local models like Qwen 1.5B)"
+  },
+  "communication_style": {
+    "language": "Russian",
+    "tone": "Professional yet friendly, encouraging",
+    "expectations": "Concise explanations with code examples in Kotlin. Focus on 'how-to'.",
+    "clarifying_questions_required": true
+  }
+}
