@@ -27,36 +27,37 @@ class McpServiceImpl(
     private val toolRegistry = mutableMapOf<String, McpServerAdapter>()
 
     init {
-        // Initialize Adapters
+        // 1. Local Git/Files
         adapters.add(LocalMcpServer())
+
+        // 2. Android
         adapters.add(AndroidMcpServer(AdbManager()))
         
-        val ghToken = System.getenv("GITHUB_TOKEN") ?: ""
+        // 3. GitHub
+        val ghToken = config.getGitHubToken()
         if (ghToken.isNotBlank()) {
             val gitClient = GitClient()
             val origin = try { gitClient.getRemoteOriginUrl() } catch(e: Exception) { "" }
             
-            var owner = System.getenv("GITHUB_OWNER") ?: ""
-            var repo = System.getenv("GITHUB_REPO") ?: ""
+            // Try to parse owner/repo from git origin, or fallback to defaults
+            var owner = "VeraSkokova" 
+            var repo = "AI-Advent-Challenge-Personal"
             
-            if (owner.isBlank() || repo.isBlank()) {
-                if (origin.contains("github.com")) {
-                    val parts = origin.removeSuffix(".git").split("github.com")[1].trim('/', ':').split('/')
-                    if (parts.size >= 2) {
-                        if (owner.isBlank()) owner = parts[0]
-                        if (repo.isBlank()) repo = parts[1]
-                    }
+            if (origin.contains("github.com")) {
+                val parts = origin.removeSuffix(".git").split("github.com")[1].trim('/', ':').split('/')
+                if (parts.size >= 2) {
+                    owner = parts[0]
+                    repo = parts[1]
                 }
             }
-            if (owner.isBlank()) owner = "VeraSkokova"
-            if (repo.isBlank()) repo = "AI-Advent-Challenge-Personal"
 
             adapters.add(GitHubMcpServer(GitHubClient(ghToken), owner, repo))
         }
 
-        val coinKey = System.getenv("COINCAP_API_KEY")
-        adapters.add(CryptoMcpServer(CoinCapClient(coinKey)))
+        // 4. Crypto
+        adapters.add(CryptoMcpServer(CoinCapClient(config.getCoinCapKey())))
         
+        // 5. Reminders
         adapters.add(ReminderMcpServer())
 
         // Register tools
@@ -65,8 +66,6 @@ class McpServiceImpl(
                 toolRegistry[tool.name] = adapter
             }
         }
-        
-        println("✅ MCP Service Initialized with ${toolRegistry.size} tools")
     }
 
     override suspend fun executeTool(command: String): Message {
@@ -91,7 +90,7 @@ class McpServiceImpl(
                     return Message(Role.ASSISTANT, "Error: Tool '$toolName' not found")
                 }
             } else {
-                 return Message(Role.ASSISTANT, "Error: Invalid tool command format (expected JSON)")
+                 return Message(Role.ASSISTANT, "Error: Invalid tool command format")
             }
         } catch (e: Exception) {
              return Message(Role.ASSISTANT, "Error executing tool: ${e.message}")
@@ -99,19 +98,9 @@ class McpServiceImpl(
     }
 
     override fun needsTool(query: String): Boolean {
-        // Simple heuristic: trigger if user explicitly asks or uses keywords
-        // Ideally, LLM decides this via "capabilities" in system prompt.
-        // But Router calls this.
-        
-        // This heuristic is weak. Better strategy:
-        // Always let LLM see tools in system prompt (done via capabilities).
-        // If LLM wants to use a tool, it outputs specific JSON format.
-        // Router should check if LLM's *response* is a tool call? 
-        // OR Router checks if *query* implies tool usage.
-        
-        // Let's stick to Router logic: keyword matching for now
-        val keywords = toolRegistry.keys.flatMap { it.split("_") }.toSet() - setOf("get", "list", "read", "check")
-        return keywords.any { query.contains(it, ignoreCase = true) }
+        // This is now purely for Router heuristic if needed, 
+        // but typically LLM decision is handled in Orchestrator via tool protocol
+        return false 
     }
 
     override fun getAvailableTools(): List<ToolInfo> {
