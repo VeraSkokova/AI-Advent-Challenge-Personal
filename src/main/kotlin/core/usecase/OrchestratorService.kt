@@ -89,19 +89,18 @@ class OrchestratorService(
                 ragService.searchAndAnswer(input)
             }
             ToolType.MCP -> {
-                mcpService.executeTool(input)
+                // LLM-based translation of Natural Language -> JSON Tool Call
+                handleMcpCall(input, mcpTools, isPrivacyMode, context)
             }
             ToolType.CLOUD_LLM -> {
                 try {
                     if (llmService.isAvailable()) {
                         llmService.generateResponse(context)
                     } else {
-                        // Fallback to Local
                         println("⚠️ Cloud LLM unavailable (config check), falling back to Local")
                         safeCallLocal(context)
                     }
                 } catch (e: Exception) {
-                    // Fallback on error
                     println("⚠️ Cloud LLM error: ${e.message}, falling back to Local")
                     e.printStackTrace()
                     safeCallLocal(context)
@@ -111,6 +110,54 @@ class OrchestratorService(
 
         messages.add(response)
         return response
+    }
+
+    private suspend fun handleMcpCall(
+        input: String, 
+        tools: List<core.ports.ToolInfo>, 
+        isPrivacyMode: Boolean,
+        originalContext: ConversationContext
+    ): Message {
+        // Construct a specific prompt for tool resolution
+        val toolPrompt = """
+            User Request: "$input"
+            
+            AVAILABLE TOOLS:
+            ${tools.joinToString("\n") { "- ${it.name}: ${it.description} (params: ${it.parameters})" }}
+            
+            INSTRUCTION:
+            Based on the user request and available tools, output a JSON object to execute the tool.
+            Format: {"tool": "tool_name", "params": {"param1": "value1"}}
+            
+            Example for 'What is git status?':
+            {"tool": "git_status", "params": {}}
+            
+            Example for 'Read file src/main.kt':
+            {"tool": "read_file", "params": {"path": "src/main.kt"}}
+            
+            If no tool fits, output {"error": "no_tool_match"}.
+            Output ONLY the JSON string, no markdown formatting.
+        """.trimIndent()
+
+        // Use the appropriate LLM to generate the JSON
+        val tempContext = originalContext.copy(
+            messages = listOf(Message(Role.USER, toolPrompt)) // Isolated context for tool selection
+        )
+
+        val jsonResponse = if (!isPrivacyMode && llmService.isAvailable()) {
+            llmService.generateResponse(tempContext).content
+        } else {
+            localLlmService.generateResponse(tempContext).content
+        }
+
+        val cleanedJson = cleanJson(jsonResponse)
+        println("🔧 Generated Tool Command: $cleanedJson")
+
+        return mcpService.executeTool(cleanedJson)
+    }
+
+    private fun cleanJson(input: String): String {
+        return input.replace("```json", "").replace("```", "").trim()
     }
 
     private suspend fun safeCallCloud(context: ConversationContext): Message {
