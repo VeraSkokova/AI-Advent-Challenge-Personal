@@ -15,7 +15,8 @@ data class LocalChatResponse(
     val model: String? = null,
     val created_at: String? = null,
     val message: LocalMessage? = null,
-    val done: Boolean? = null
+    val done: Boolean? = null,
+    val error: String? = null // Capture error messages from Ollama
 )
 
 @Serializable
