@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 fun main() = runBlocking {
     // 1. Initialize Configuration
     val config = AppConfig
+    config.printStatus()
 
     // 2. Initialize Infrastructure Services
     val yandexService = YandexLlmService(config)
@@ -32,7 +33,7 @@ fun main() = runBlocking {
         localLlmService = localService,
         ragService = ragService,
         mcpService = mcpService,
-        userProfileRepository = userProfileRepo
+        userProfileRepo = userProfileRepo
     )
 
     // 5. Start Application Loop
