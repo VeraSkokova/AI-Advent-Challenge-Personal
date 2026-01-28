@@ -33,7 +33,7 @@ fun main() = runBlocking {
         localLlmService = localService,
         ragService = ragService,
         mcpService = mcpService,
-        userProfileRepo = userProfileRepo
+        userProfileRepository = userProfileRepo // Fixed parameter name
     )
 
     // 5. Start Application Loop
