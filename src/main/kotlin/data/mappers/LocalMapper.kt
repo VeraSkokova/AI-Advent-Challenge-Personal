@@ -3,13 +3,22 @@ package data.mappers
 import core.domain.model.ConversationContext
 import core.domain.model.Message
 import core.domain.model.Role
+import core.usecase.PromptFactory
 import data.dto.local.LocalChatRequest
 import data.dto.local.LocalChatResponse
 import data.dto.local.LocalMessage
 
 object LocalMapper {
     fun toRequest(context: ConversationContext, modelName: String): LocalChatRequest {
-        val messages = context.messages.map { msg ->
+        val systemPrompt = PromptFactory.createSystemPrompt(context.userPreferences)
+        
+        val messages = mutableListOf<LocalMessage>()
+        
+        // Add System Prompt first
+        messages.add(LocalMessage(role = "system", content = systemPrompt))
+        
+        // Add conversation history
+        messages.addAll(context.messages.map { msg ->
             LocalMessage(
                 role = when (msg.role) {
                     Role.USER -> "user"
@@ -18,7 +27,7 @@ object LocalMapper {
                 },
                 content = msg.content
             )
-        }
+        })
 
         return LocalChatRequest(
             model = modelName,
