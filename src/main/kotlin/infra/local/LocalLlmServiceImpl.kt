@@ -13,6 +13,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -22,13 +23,15 @@ class LocalLlmServiceImpl(
     private val config: AppConfig
 ) : LocalLlmService {
 
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json {
-                prettyPrint = true
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            })
+            json(json)
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 120_000 // Local models can be slow
@@ -39,30 +42,32 @@ class LocalLlmServiceImpl(
         val requestDto = LocalMapper.toRequest(context, config.local.modelName)
         
         try {
-            // Using /api/chat endpoint which expects "messages"
-            // Base URL example: http://localhost:11434/api
             val endpoint = if (config.local.baseUrl.endsWith("/")) {
                 "${config.local.baseUrl}chat"
             } else {
                 "${config.local.baseUrl}/chat"
             }
 
-            val response: LocalChatResponse = client.post(endpoint) {
+            // Debug logging
+            println("🏠 Calling Local LLM at $endpoint with model ${config.local.modelName}")
+
+            val response = client.post(endpoint) {
                 contentType(ContentType.Application.Json)
                 setBody(requestDto)
-            }.body()
+            }
+            
+            val responseBody = response.bodyAsText()
+            // println("🏠 Raw Response: $responseBody") // Uncomment for deep debug
 
-            return LocalMapper.toMessage(response)
+            val chatResponse = json.decodeFromString<LocalChatResponse>(responseBody)
+            return LocalMapper.toMessage(chatResponse)
+
         } catch (e: Exception) {
             throw RuntimeException("Local LLM API Error: ${e.message}", e)
         }
     }
 
     override suspend fun isAvailable(): Boolean {
-        return try {
-            true 
-        } catch (e: Exception) {
-            false
-        }
+        return true
     }
 }
