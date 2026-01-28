@@ -2,6 +2,7 @@ package data.dto.yandex
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class YandexRequest(
@@ -20,7 +21,24 @@ data class CompletionOptions(
 @Serializable
 data class YandexMessage(
     val role: String,
-    val text: String = "" // Fix: Default to empty string to avoid "missing field" error
+    val text: String = "",
+    val toolCallList: YandexToolCallList? = null
+)
+
+@Serializable
+data class YandexToolCallList(
+    val toolCalls: List<YandexToolCall>
+)
+
+@Serializable
+data class YandexToolCall(
+    val functionCall: YandexFunctionCall
+)
+
+@Serializable
+data class YandexFunctionCall(
+    val name: String,
+    val arguments: JsonObject
 )
 
 @Serializable
