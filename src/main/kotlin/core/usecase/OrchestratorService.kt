@@ -35,12 +35,20 @@ class OrchestratorService(
         val profile = userProfileRepository.loadProfile()
         
         // Define capabilities for system prompt
-        val capabilities = listOf(
+        val capabilities = mutableListOf(
             "Access to RAG Knowledge Base (documentation)",
-            "MCP Tools (Time, Calculator, etc.)",
             "Privacy Mode (Local LLM only)",
             "Expert Mode (Parallel Cloud + Local analysis)"
         )
+        
+        // Add dynamic MCP tools
+        val mcpTools = mcpService.getAvailableTools()
+        if (mcpTools.isNotEmpty()) {
+            capabilities.add("MCP Tools Available:")
+            mcpTools.forEach { tool ->
+                capabilities.add("  - ${tool.name}: ${tool.description} (params: ${tool.parameters.joinToString()})")
+            }
+        }
         
         val context = ConversationContext(messages, profile, capabilities)
 
