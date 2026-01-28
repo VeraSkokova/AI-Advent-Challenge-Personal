@@ -2,7 +2,7 @@ package app.console
 
 import core.usecase.OrchestratorService
 import core.usecase.Router
-import data.repository.FileUserProfileRepository
+import infra.repository.FileUserProfileRepository
 import infra.config.AppConfig
 import infra.local.LocalLlmServiceImpl
 import infra.mcp.McpServiceImpl
@@ -12,8 +12,8 @@ import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
     // 1. Initialize Configuration
-    val config = AppConfig
-    config.printStatus()
+    val config = AppConfig()
+    println("🔧 Configuration loaded.")
 
     // 2. Initialize Infrastructure Services
     val yandexService = YandexLlmService(config)
@@ -33,7 +33,7 @@ fun main() = runBlocking {
         localLlmService = localService,
         ragService = ragService,
         mcpService = mcpService,
-        userProfileRepository = userProfileRepo // Fixed parameter name
+        userProfileRepository = userProfileRepo
     )
 
     // 5. Start Application Loop
