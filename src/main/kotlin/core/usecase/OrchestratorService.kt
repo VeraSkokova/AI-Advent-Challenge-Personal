@@ -32,7 +32,6 @@ class OrchestratorService(
 
         val profile = userProfileRepository.loadProfile()
         
-        // Pass MCP tools into system prompt (capabilities) so LLM knows about them.
         val capabilities = mutableListOf(
             "Access to RAG Knowledge Base (documentation)",
             "Privacy Mode (Local LLM only)",
@@ -41,13 +40,13 @@ class OrchestratorService(
         
         val mcpTools = mcpService.getAvailableTools()
         if (mcpTools.isNotEmpty()) {
-            capabilities.add("MCP Tools (You can call these by outputting JSON: {\"tool\": \"name\", \"params\": {...}}):")
+            capabilities.add("MCP Tools (To use, output JSON: {\"tool\": \"name\", \"params\": {...}}):")
             mcpTools.forEach { tool ->
                 capabilities.add("  - ${tool.name}: ${tool.description} (params: ${tool.parameters.joinToString()})")
             }
         }
         
-        val context = ConversationContext(messages, profile, capabilities)
+        var context = ConversationContext(messages, profile, capabilities)
 
         if (isExpertMode) {
             return coroutineScope {
@@ -62,33 +61,44 @@ class OrchestratorService(
 
         val toolType = router.determineTool(input, forcePrivacy = isPrivacyMode)
 
-        // If Router suggests MCP or Local/Cloud LLM, we let the LLM generate the response.
-        // If the LLM generates a JSON tool call, we catch it and execute it.
-        // This follows the pattern: LLM (with tools in prompt) -> JSON -> Execute -> Result -> LLM (optional) or Return
-        
-        val response = if (toolType == ToolType.RAG) {
+        val initialResponse = if (toolType == ToolType.RAG) {
             ragService.searchAndAnswer(input)
         } else {
-            // Default path: Ask LLM (Local or Cloud)
-            val initialResponse = if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
+            if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
+                safeCallLocal(context)
+            } else {
+                safeCallCloud(context)
+            }
+        }
+        
+        // Handle Tool Calls (Recursively or Single-Step)
+        if (isToolCall(initialResponse.content)) {
+            val toolResult = mcpService.executeTool(initialResponse.content)
+            
+            // Add tool execution to history
+            // We simulate the conversation: 
+            // User: "Status?" -> Assistant: "{tool: git...}" -> System: "Output: ..."
+            // Then we ask Assistant again for the final answer.
+            
+            messages.add(initialResponse) // The JSON command
+            messages.add(toolResult)      // The Tool Output
+            
+            // Refresh context with new history
+            context = ConversationContext(messages, profile, capabilities)
+            
+            // Call LLM again to synthesize the final answer
+            val finalResponse = if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
                 safeCallLocal(context)
             } else {
                 safeCallCloud(context)
             }
             
-            // Check if response is a tool call
-            if (isToolCall(initialResponse.content)) {
-                val toolResult = mcpService.executeTool(initialResponse.content)
-                // Optionally feed result back to LLM, but for now just return the tool output
-                // or a simple "Done: <output>"
-                toolResult
-            } else {
-                initialResponse
-            }
+            messages.add(finalResponse)
+            return finalResponse
+        } else {
+            messages.add(initialResponse)
+            return initialResponse
         }
-
-        messages.add(response)
-        return response
     }
 
     private fun isToolCall(content: String): Boolean {
