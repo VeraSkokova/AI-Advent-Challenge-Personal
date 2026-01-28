@@ -20,7 +20,7 @@ data class CompletionOptions(
 @Serializable
 data class YandexMessage(
     val role: String,
-    val text: String
+    val text: String = "" // Fix: Default to empty string to avoid "missing field" error
 )
 
 @Serializable
