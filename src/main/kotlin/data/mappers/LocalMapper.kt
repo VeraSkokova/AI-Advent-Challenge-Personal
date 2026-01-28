@@ -8,8 +8,6 @@ import data.dto.local.LocalCompletionResponse
 
 object LocalMapper {
     fun toRequest(context: ConversationContext, modelName: String): LocalCompletionRequest {
-        // Simple strategy: concatenate last few messages or just send the last one as prompt
-        // For 'instruct' models, we might need a specific format, but here we keep it simple
         val lastMessage = context.messages.lastOrNull()?.content ?: ""
         
         return LocalCompletionRequest(
@@ -20,9 +18,13 @@ object LocalMapper {
     }
 
     fun toMessage(response: LocalCompletionResponse): Message {
+        val content = response.response 
+            ?: response.message?.content 
+            ?: "Empty response from Local LLM"
+            
         return Message(
             role = Role.ASSISTANT,
-            content = response.response
+            content = content
         )
     }
 }
