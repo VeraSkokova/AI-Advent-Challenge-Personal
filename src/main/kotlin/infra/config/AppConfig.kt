@@ -9,7 +9,14 @@ object AppConfig {
     init {
         val configFile = File("config.properties")
         if (configFile.exists()) {
-            properties.load(configFile.inputStream())
+            try {
+                properties.load(configFile.inputStream())
+                println("✅ Loaded configuration from config.properties")
+            } catch (e: Exception) {
+                println("⚠️ Failed to load config.properties: ${e.message}")
+            }
+        } else {
+            println("ℹ️ config.properties not found, using Environment Variables")
         }
     }
 
@@ -21,7 +28,8 @@ object AppConfig {
 
     val local = LocalConfig(
         baseUrl = System.getenv("LOCAL_LLM_URL") ?: "http://localhost:11434/api",
-        modelName = System.getenv("LOCAL_LLM_MODEL") ?: "llama3.2"
+        // Updated default model to qwen2.5:1.5b as requested
+        modelName = System.getenv("LOCAL_LLM_MODEL") ?: "qwen2.5:1.5b"
     )
     
     val rag = RagConfig(
@@ -29,8 +37,16 @@ object AppConfig {
     )
     
     val mcp = McpConfig(
-        enabled = true // For now hardcoded
+        enabled = true
     )
+
+    fun printStatus() {
+        println("--- Configuration Status ---")
+        println("Yandex API Key present: ${yandex.apiKey.isNotBlank()}")
+        println("Yandex Folder ID: ${yandex.folderId}")
+        println("Local Model: ${local.modelName} at ${local.baseUrl}")
+        println("----------------------------")
+    }
 }
 
 data class YandexConfig(val folderId: String, val apiKey: String, val modelUri: String)
