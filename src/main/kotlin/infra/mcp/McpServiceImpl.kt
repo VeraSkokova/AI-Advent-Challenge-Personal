@@ -12,6 +12,7 @@ import infra.mcp.tools.AndroidMcpServer
 import infra.mcp.tools.CryptoMcpServer
 import infra.mcp.tools.GitHubMcpServer
 import infra.mcp.tools.LocalMcpServer
+import infra.mcp.tools.ReminderMcpServer
 import infra.utils.AdbManager
 import infra.utils.GitClient
 import kotlinx.serialization.json.Json
@@ -27,28 +28,18 @@ class McpServiceImpl(
 
     init {
         // Initialize Adapters
-        
-        // 1. Local (Git/Files)
         adapters.add(LocalMcpServer())
-        
-        // 2. Android (if configured or just add anyway, AdbManager handles checks)
         adapters.add(AndroidMcpServer(AdbManager()))
         
-        // 3. GitHub (if token present)
         val ghToken = System.getenv("GITHUB_TOKEN") ?: ""
         if (ghToken.isNotBlank()) {
-            // Try to infer owner/repo from GitClient if not in Env
             val gitClient = GitClient()
             val origin = try { gitClient.getRemoteOriginUrl() } catch(e: Exception) { "" }
-            
-            // Expected format: https://github.com/Owner/Repo.git or git@github.com:Owner/Repo.git
-            // Fallback to "VeraSkokova" / "AI-Advent-Challenge-Personal" if parsing fails, or use Env
             
             var owner = System.getenv("GITHUB_OWNER") ?: ""
             var repo = System.getenv("GITHUB_REPO") ?: ""
             
             if (owner.isBlank() || repo.isBlank()) {
-                // Simple parser
                 if (origin.contains("github.com")) {
                     val parts = origin.removeSuffix(".git").split("github.com")[1].trim('/', ':').split('/')
                     if (parts.size >= 2) {
@@ -57,19 +48,16 @@ class McpServiceImpl(
                     }
                 }
             }
-            
-            // If still blank, use defaults (safe for personal agent in this repo)
             if (owner.isBlank()) owner = "VeraSkokova"
             if (repo.isBlank()) repo = "AI-Advent-Challenge-Personal"
 
             adapters.add(GitHubMcpServer(GitHubClient(ghToken), owner, repo))
-        } else {
-            println("ℹ️ GitHub MCP skipped (GITHUB_TOKEN missing)")
         }
 
-        // 4. Crypto (Optional)
         val coinKey = System.getenv("COINCAP_API_KEY")
         adapters.add(CryptoMcpServer(CoinCapClient(coinKey)))
+        
+        adapters.add(ReminderMcpServer())
 
         // Register tools
         adapters.forEach { adapter ->
@@ -82,11 +70,6 @@ class McpServiceImpl(
     }
 
     override suspend fun executeTool(command: String): Message {
-        // Command is likely a raw string from LLM.
-        // We need to parse it. For simplicity, let's assume LLM sends JSON: {"tool": "name", "params": {...}}
-        // OR LLM sends "tool_name param1=val1"
-        // Let's support the JSON format as it's cleaner for complex tools
-        
         try {
             val json = Json { ignoreUnknownKeys = true }
             val root = json.parseToJsonElement(command)
