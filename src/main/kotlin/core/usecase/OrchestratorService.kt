@@ -33,7 +33,16 @@ class OrchestratorService(
 
         // 2. Load context
         val profile = userProfileRepository.loadProfile()
-        val context = ConversationContext(messages, profile)
+        
+        // Define capabilities for system prompt
+        val capabilities = listOf(
+            "Access to RAG Knowledge Base (documentation)",
+            "MCP Tools (Time, Calculator, etc.)",
+            "Privacy Mode (Local LLM only)",
+            "Expert Mode (Parallel Cloud + Local analysis)"
+        )
+        
+        val context = ConversationContext(messages, profile, capabilities)
 
         // 3. Expert Mode: Run Cloud and Local in parallel
         if (isExpertMode) {
