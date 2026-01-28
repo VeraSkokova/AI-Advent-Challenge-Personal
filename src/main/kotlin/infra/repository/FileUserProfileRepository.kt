@@ -8,6 +8,7 @@ import core.domain.model.Stack
 import core.ports.UserProfileRepository
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import java.io.File
 import org.slf4j.LoggerFactory
 
@@ -61,9 +62,9 @@ class FileUserProfileRepository(
 ) : UserProfileRepository {
 
     private val logger = LoggerFactory.getLogger(FileUserProfileRepository::class.java)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
-    override fun loadProfile(): UserPreferences? {
+    override suspend fun loadProfile(): UserPreferences? {
         // Try to load from resources first (Packaged in JAR)
         val resourceStream = this::class.java.classLoader.getResourceAsStream(configFileName)
         val configContent = if (resourceStream != null) {
@@ -90,8 +91,23 @@ class FileUserProfileRepository(
         }
     }
 
+    override suspend fun saveProfile(profile: UserPreferences) {
+        // Since we load primarily from resources (read-only in JAR), saving back to resources is tricky/impossible at runtime.
+        // We will save to the local file system override instead.
+        try {
+            val dto = mapDomainToDto(profile)
+            val content = json.encodeToString(dto)
+            val file = File(configFileName)
+            file.writeText(content)
+            logger.info("💾 Saved updated profile to ${file.absolutePath}")
+        } catch (e: Exception) {
+            logger.error("❌ Failed to save profile", e)
+        }
+    }
+
     private fun mapDtoToDomain(dto: ConfigDto): UserPreferences {
         return UserPreferences(
+            version = dto.version,
             userProfile = UserProfile(
                 name = dto.user_profile.name,
                 location = dto.user_profile.location,
@@ -118,6 +134,39 @@ class FileUserProfileRepository(
                 tone = dto.communication_style.tone,
                 expectations = dto.communication_style.expectations,
                 clarifyingQuestionsRequired = dto.communication_style.clarifying_questions_required
+            )
+        )
+    }
+
+    private fun mapDomainToDto(domain: UserPreferences): ConfigDto {
+        return ConfigDto(
+            version = domain.version,
+            user_profile = ProfileDto(
+                name = domain.userProfile.name,
+                location = domain.userProfile.location,
+                timezone = domain.userProfile.timezone,
+                language = domain.userProfile.language,
+                profession = domain.userProfile.profession,
+                level = domain.userProfile.level,
+                role = domain.userProfile.role,
+                interests = domain.userProfile.interests
+            ),
+            technical_context = TechDto(
+                primary_languages = domain.technicalContext.primaryLanguages,
+                stack = StackDto(
+                    android = domain.technicalContext.stack.android,
+                    backend = domain.technicalContext.stack.backend,
+                    ai_ml = domain.technicalContext.stack.aiMl,
+                    tools = domain.technicalContext.stack.tools
+                ),
+                preferred_libraries = domain.technicalContext.preferredLibraries,
+                hardware = domain.technicalContext.hardware
+            ),
+            communication_style = StyleDto(
+                language = domain.communicationStyle.language,
+                tone = domain.communicationStyle.tone,
+                expectations = domain.communicationStyle.expectations,
+                clarifying_questions_required = domain.communicationStyle.clarifyingQuestionsRequired
             )
         )
     }
