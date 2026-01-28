@@ -3,65 +3,78 @@ package infra.rag
 import core.domain.model.Message
 import core.domain.model.Role
 import core.ports.RagService
-import data.dto.rag.RagSearchRequest
-import data.dto.rag.RagSearchResponse
-import data.mappers.RagMapper
 import infra.config.AppConfig
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import java.io.File
+import kotlin.math.sqrt
 
 class RagServiceImpl(
     private val config: AppConfig
 ) : RagService {
 
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(Json {
-                prettyPrint = true
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            })
-        }
-        install(HttpTimeout) {
-            requestTimeoutMillis = 30_000
-        }
-    }
+    // Helper client for embeddings (reusing the one we built for Indexer)
+    private val embeddingClient = YandexEmbeddingClient(config)
+    private val json = Json { ignoreUnknownKeys = true }
+    
+    // We can expose indexer to Main if needed, but RagService focuses on Search
+    val indexer = Indexer(embeddingClient)
 
     override suspend fun searchAndAnswer(query: String): Message {
-        val requestDto = RagSearchRequest(query = query)
-        
-        try {
-            // Assuming the RAG service has a specific search endpoint
-            // This URL structure is based on typical RAG setups, might need adjustment based on actual RAG repo code
-            val response: RagSearchResponse = client.post("${config.rag.baseUrl}/api/search") {
-                contentType(ContentType.Application.Json)
-                setBody(requestDto)
-            }.body()
-
-            val contextString = RagMapper.toContextString(response)
-            
-            return Message(
-                role = Role.SYSTEM,
-                content = "Found relevant documentation:\n$contextString"
-            )
-        } catch (e: Exception) {
-            // Fallback gracefully if RAG service is down or returns error
-            return Message(Role.SYSTEM, "Failed to retrieve documentation: ${e.message}")
+        // 1. Load Index
+        val indexFile = File("index.json")
+        if (!indexFile.exists()) {
+            return Message(Role.SYSTEM, "Index file not found. Please run '/index <path>' first.")
         }
+
+        val chunks: List<Chunk> = try {
+            json.decodeFromString(indexFile.readText())
+        } catch (e: Exception) {
+            return Message(Role.SYSTEM, "Failed to load index: ${e.message}")
+        }
+
+        // 2. Embed Query
+        val queryEmbedding = embeddingClient.getEmbedding(query)
+        if (queryEmbedding.isEmpty()) {
+            return Message(Role.SYSTEM, "Failed to generate embedding for query.")
+        }
+
+        // 3. Cosine Similarity Search
+        val results = chunks.map { chunk ->
+            val score = cosineSimilarity(queryEmbedding, chunk.embedding)
+            chunk to score
+        }
+        .filter { it.second > 0.5 } // Threshold
+        .sortedByDescending { it.second }
+        .take(3)
+
+        if (results.isEmpty()) {
+             return Message(Role.SYSTEM, "No relevant info found in documentation (threshold 0.5).")
+        }
+
+        // 4. Construct Context
+        val contextBuilder = StringBuilder("Found relevant documentation:\n\n")
+        results.forEachIndexed { idx, (chunk, score) ->
+            contextBuilder.append("[${idx + 1}] Source: ${chunk.documentId} (Score: ${String.format("%.2f", score)})\n")
+            contextBuilder.append("${chunk.content}\n\n")
+        }
+
+        return Message(Role.SYSTEM, contextBuilder.toString())
     }
 
     override suspend fun isRelevant(query: String): Boolean {
-        // Simple keyword heuristic for now, can be improved with a classifier
-        val keywords = listOf("documentation", "docs", "how to", "api", "reference", "guide")
-        return keywords.any { query.contains(it, ignoreCase = true) }
+        return query.contains("doc") || query.contains("rag") // naive check
+    }
+
+    private fun cosineSimilarity(v1: List<Double>, v2: List<Double>): Double {
+        if (v1.size != v2.size) return 0.0
+        var dotProduct = 0.0
+        var normA = 0.0
+        var normB = 0.0
+        for (i in v1.indices) {
+            dotProduct += v1[i] * v2[i]
+            normA += v1[i] * v1[i]
+            normB += v2[i] * v2[i]
+        }
+        return if (normA > 0 && normB > 0) dotProduct / (sqrt(normA) * sqrt(normB)) else 0.0
     }
 }
