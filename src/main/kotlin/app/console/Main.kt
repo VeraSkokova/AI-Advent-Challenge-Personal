@@ -38,7 +38,7 @@ fun main() = runBlocking {
 
     // 5. Start Application Loop
     interactionService.writeOutput("🤖 God Agent Initialized. Ready for commands.")
-    interactionService.writeOutput("Commands: /expert [query], /privacy [query], /exit")
+    interactionService.writeOutput("Commands: /expert [query], /privacy [query], /index [path], /exit")
 
     while (true) {
         val input = interactionService.readInput()
@@ -47,6 +47,24 @@ fun main() = runBlocking {
         if (input.equals("/exit", ignoreCase = true)) {
             interactionService.writeOutput("Goodbye!")
             break
+        }
+        
+        // Handle /index command specifically
+        if (input.startsWith("/index")) {
+            val path = input.removePrefix("/index").trim()
+            if (path.isBlank()) {
+                interactionService.writeError("Please specify a path: /index <path>")
+            } else {
+                interactionService.writeOutput("🔍 Indexing documents in '$path'...")
+                try {
+                    val count = ragService.indexer.indexDirectory(path)
+                    interactionService.writeOutput("✅ Indexed $count chunks. Saved to index.json")
+                } catch (e: Exception) {
+                    interactionService.writeError("Indexing failed: ${e.message}")
+                    e.printStackTrace()
+                }
+            }
+            continue
         }
 
         try {
