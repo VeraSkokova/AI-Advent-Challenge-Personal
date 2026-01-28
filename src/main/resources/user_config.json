@@ -4,55 +4,53 @@
     "name": "Vera",
     "location": "Bangkok, Thailand",
     "timezone": "UTC+7",
-    "language": "ru",
-    "profession": "Middle/Senior Kotlin/Android Developer",
-    "level": "advanced",
-    "role": "Developer + Mentor",
+    "language": "Russian (Native), English (Advanced)",
+    "profession": "Android Developer",
+    "level": "Middle",
+    "role": "Developer",
     "interests": [
-      "Воздушные полотна (aerial silk) — тренировки, соревнования",
-      "Музыкальные визуализации 'год в обзоре' (Spotify, Yandex Music)",
-      "Косметика и уход (исследование и выбор шампуней, кондиционеров)"
+      "Kotlin",
+      "Android Development",
+      "AI Agents",
+      "Aerial Silks",
+      "Beauty Products"
     ]
   },
   "technical_context": {
     "primary_languages": [
-      "Kotlin (advanced)",
-      "Java (familiar with JVM ecosystem)"
+      "Kotlin",
+      "Java"
     ],
     "stack": {
       "android": [
+        "Jetpack Compose",
         "ViewModel",
-        "savedStateHandle",
-        "Fragment lifecycle",
-        "UI debugging"
+        "Coroutines"
       ],
       "backend": [
-        "Ktor (CIO)"
+        "Ktor"
       ],
       "ai_ml": [
-        "Yandex AI Studio",
-        "Yandex Cloud LLM API",
-        "GPT API",
-        "RAG",
-        "MCP"
+        "YandexGPT",
+        "Ollama"
       ],
       "tools": [
         "Git",
-        "Gradle",
-        "IntelliJ IDEA"
+        "IntelliJ IDEA",
+        "Gradle"
       ]
     },
     "preferred_libraries": [
-      "Ktor",
-      "kotlinx.serialization",
-      "Yandex Cloud SDK"
+      "Koin",
+      "Retrofit",
+      "Ktor Client"
     ],
-    "hardware": "Windows PC, 16GB RAM"
+    "hardware": "Laptop with limited GPU (using small local models like Qwen 1.5B)"
   },
   "communication_style": {
     "language": "Russian",
-    "tone": "Collaborative, technical, detail-oriented, professional",
-    "expectations": "Clear technical solutions, architectural reasoning, code examples. Assistant must be autonomous.",
+    "tone": "Professional yet friendly, encouraging",
+    "expectations": "Concise explanations with code examples in Kotlin. Focus on 'how-to'.",
     "clarifying_questions_required": true
   }
 }
