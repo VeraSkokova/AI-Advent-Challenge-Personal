@@ -7,12 +7,22 @@ import infra.local.LocalLlmServiceImpl
 import infra.mcp.McpServiceImpl
 import infra.rag.RagServiceImpl
 import infra.yandex.YandexLlmService
+import infra.voice.VoiceInputService
+import config.VoiceConfig
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
     // 1. Initialize Configuration
     val config = AppConfig()
     println("🔧 Configuration loaded.")
+    
+    // Загрузка VoiceConfig
+    val voiceConfig = try {
+        VoiceConfig.load()
+    } catch (e: Exception) {
+        println("⚠️ VoiceConfig не загружен (голосовой ввод недоступен): ${e.message}")
+        null
+    }
 
     // 2. Initialize Infrastructure Services
     val yandexService = YandexLlmService(config)
@@ -20,6 +30,9 @@ fun main() = runBlocking {
     val ragService = RagServiceImpl(config)
     val mcpService = McpServiceImpl(config)
     val userProfileRepo = FileUserProfileRepository()
+    
+    // Голосовой сервис (опционально)
+    val voiceService = voiceConfig?.let { VoiceInputService(it) }
     
     // 3. Initialize Core Interaction
     val interactionService = ConsoleInteractionService()
@@ -35,7 +48,12 @@ fun main() = runBlocking {
 
     // 5. Start Application Loop
     interactionService.writeOutput("🤖 God Agent Initialized. Ready for commands.")
-    interactionService.writeOutput("Commands: /expert [query], /privacy [query], /index [path], /exit")
+    val commandsHelp = if (voiceService != null) {
+        "Commands: /expert [query], /privacy [query], /index [path], /voice, /exit"
+    } else {
+        "Commands: /expert [query], /privacy [query], /index [path], /exit"
+    }
+    interactionService.writeOutput(commandsHelp)
 
     while (true) {
         val input = interactionService.readInput()
@@ -45,6 +63,42 @@ fun main() = runBlocking {
             interactionService.writeOutput("Goodbye!")
             break
         }
+        
+        // ===== /voice command =====
+        if (input.equals("/voice", ignoreCase = true)) {
+            if (voiceService == null) {
+                interactionService.writeError("Голосовой ввод недоступен (проверьте local.properties)")
+                continue
+            }
+            
+            interactionService.writeOutput("🎙️ Нажмите Enter, чтобы начать запись...")
+            readlnOrNull()
+            
+            val transcribedText = voiceService.recordAndTranscribe()
+            
+            if (transcribedText.startsWith("Error")) {
+                interactionService.writeError(transcribedText)
+                continue
+            }
+            
+            if (transcribedText.isBlank() || transcribedText.trim() == "[музыка]") {
+                interactionService.writeOutput("Тишина или шум (текст не распознан). Попробуйте еще раз.")
+                continue
+            }
+            
+            interactionService.writeOutput("Вы сказали: \"$transcribedText\"")
+            
+            // Передаем распознанный текст в Orchestrator как обычный текстовый запрос
+            try {
+                val response = orchestrator.processUserMessage(transcribedText, isExpertMode = false, isPrivacyMode = false)
+                interactionService.writeMessage(response)
+            } catch (e: Exception) {
+                interactionService.writeError("Error processing voice input: ${e.message}")
+                e.printStackTrace()
+            }
+            continue
+        }
+        // ===== end /voice =====
         
         // Handle /index command specifically
         if (input.startsWith("/index")) {
