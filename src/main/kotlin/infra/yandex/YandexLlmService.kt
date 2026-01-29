@@ -51,7 +51,7 @@ class YandexLlmService(
             
             val responseBody = response.bodyAsText()
             // Debug log to console
-            println("☁️ Yandex Response Raw: $responseBody")
+            //println("☁️ Yandex Response Raw: $responseBody")
 
             val yandexResponse = json.decodeFromString<YandexResponse>(responseBody)
             return YandexMapper.toMessage(yandexResponse)
