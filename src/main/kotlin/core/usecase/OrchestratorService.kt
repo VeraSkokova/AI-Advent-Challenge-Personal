@@ -3,7 +3,6 @@ package core.usecase
 import core.domain.model.ConversationContext
 import core.domain.model.Message
 import core.domain.model.Role
-import core.domain.model.ToolType
 import core.ports.LlmService
 import core.ports.LocalLlmService
 import core.ports.McpService
@@ -13,7 +12,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
 class OrchestratorService(
-    private val router: Router,
     private val llmService: LlmService,
     private val localLlmService: LocalLlmService,
     private val ragService: RagService,
@@ -21,6 +19,10 @@ class OrchestratorService(
     private val userProfileRepository: UserProfileRepository
 ) {
     private val messages = mutableListOf<Message>()
+
+    private val GREEN_THRESHOLD = 0.52
+    private val GREY_THRESHOLD = 0.45
+    private val MIN_GAP = 0.02
 
     suspend fun processUserMessage(
         input: String,
@@ -31,13 +33,13 @@ class OrchestratorService(
         messages.add(userMessage)
 
         val profile = userProfileRepository.loadProfile()
-        
+
         val capabilities = mutableListOf(
             "Access to RAG Knowledge Base (documentation)",
             "Privacy Mode (Local LLM only)",
             "Expert Mode (Parallel Cloud + Local analysis)"
         )
-        
+
         val mcpTools = mcpService.getAvailableTools()
         if (mcpTools.isNotEmpty()) {
             capabilities.add("MCP Tools (To use, output JSON: {\"tool\": \"name\", \"params\": {...}}):")
@@ -45,7 +47,7 @@ class OrchestratorService(
                 capabilities.add("  - ${tool.name}: ${tool.description} (params: ${tool.parameters.joinToString()})")
             }
         }
-        
+
         var context = ConversationContext(messages, profile, capabilities)
 
         if (isExpertMode) {
@@ -59,48 +61,106 @@ class OrchestratorService(
             }
         }
 
-        val toolType = router.determineTool(input, forcePrivacy = isPrivacyMode)
+        // === RAG Logic ===
+        var ragZone: String? = null
+        var ragScore: Double? = null
+        var ragSource: String? = null
 
-        var response = if (toolType == ToolType.RAG) {
-            val ragResult = ragService.searchAndAnswer(input)
-            if (ragResult.content == "NO_RAG_CONTEXT") {
-                // Fallback to LLM if RAG found nothing relevant
-                if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
-                    safeCallLocal(context)
-                } else {
-                    safeCallCloud(context)
+        val ragResult = ragService.retrieve(input)
+
+        if (ragResult != null) {
+            val scoreGap = ragResult.scoreGap ?: 0.0
+            val maxScore = ragResult.maxScore
+
+            val zone = when {
+                maxScore >= GREEN_THRESHOLD && scoreGap >= MIN_GAP -> "green"
+                maxScore >= GREY_THRESHOLD -> "grey"
+                else -> "red"
+            }
+
+            //println("🔍 RAG Debug: MaxScore=${String.format("%.3f", maxScore)}, Gap=${String.format("%.3f", scoreGap)} -> ZONE: ${zone.uppercase()}")
+            //println("📜 Context Preview: ${ragResult.contextText.take(200).replace("\n", " ")}...")
+
+            when (zone) {
+                "green" -> {
+                    val systemPrompt = "📚 **Trusted Knowledge Base**\n" +
+                            "Use the following context to answer the user's question. \n" +
+                            "Priority: HIGH. Base your answer strictly on this information if possible.\n\n" +
+                            ragResult.contextText
+                    messages.add(Message(Role.SYSTEM, systemPrompt))
+                    context = ConversationContext(messages, profile, capabilities)
+
+                    ragZone = "✅ GREEN"
+                    ragScore = maxScore
+                    ragSource = extractSourceFromContext(ragResult.contextText)
                 }
-            } else {
-                ragResult
+                "grey" -> {
+                    val cautionText = "⚠️ **Potential Context** (score=${String.format("%.2f", maxScore)})\n" +
+                            "The following context might be relevant. Check if it contains the answer.\n" +
+                            "If it helps, use it. If it's irrelevant, answer using your general knowledge.\n\n" +
+                            ragResult.contextText
+                    messages.add(Message(Role.SYSTEM, cautionText))
+                    context = ConversationContext(messages, profile, capabilities)
+
+                    ragZone = "⚠️ GREY"
+                    ragScore = maxScore
+                    ragSource = extractSourceFromContext(ragResult.contextText)
+                }
+                "red" -> {
+                    println("   -> Skipping RAG context (too low score)")
+                    ragZone = "❌ RED (not used)"
+                    ragScore = maxScore
+                }
             }
         } else {
-            if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
-                safeCallLocal(context)
-            } else {
-                safeCallCloud(context)
-            }
+            println("🔍 RAG Debug: No result or Index missing.")
         }
-        
-        // Handle Tool Calls (Recursively or Single-Step)
+
+        // === Выбор LLM ===
+        var response = if (isPrivacyMode) {
+            safeCallLocal(context)
+        } else {
+            safeCallCloud(context)
+        }
+
+        // === Tool Call Handling ===
         if (isToolCall(response.content)) {
             val toolResult = mcpService.executeTool(response.content)
-            
-            messages.add(response) // The JSON command
-            messages.add(toolResult)      // The Tool Output
-            
+            messages.add(response)
+            messages.add(toolResult)
             context = ConversationContext(messages, profile, capabilities)
-            
-            val finalResponse = if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
+
+            val finalResponse = if (isPrivacyMode) {
                 safeCallLocal(context)
             } else {
                 safeCallCloud(context)
             }
-            
             response = finalResponse
+        }
+
+        // === Добавляем RAG Footer ===
+        if (ragZone != null) {
+            val footer = buildString {
+                append("\n\n---\n")
+                append("🔍 **RAG Status:** $ragZone")
+                if (ragScore != null) {
+                    append(" | Score: ${String.format("%.2f", ragScore)}")
+                }
+                if (ragSource != null) {
+                    append(" | Source: `$ragSource`")
+                }
+            }
+            response = Message(response.role, response.content + footer)
         }
 
         messages.add(response)
         return response
+    }
+
+    private fun extractSourceFromContext(contextText: String): String? {
+        // Извлекаем имя файла из строки типа "**[1] chunking.txt** (Score: 0.54)"
+        val regex = """\*\*\[1\] ([^\*]+)\*\*""".toRegex()
+        return regex.find(contextText)?.groupValues?.getOrNull(1)?.trim()
     }
 
     private fun isToolCall(content: String): Boolean {

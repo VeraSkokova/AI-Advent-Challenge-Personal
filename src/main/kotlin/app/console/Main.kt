@@ -1,7 +1,6 @@
 package app.console
 
 import core.usecase.OrchestratorService
-import core.usecase.Router
 import infra.repository.FileUserProfileRepository
 import infra.config.AppConfig
 import infra.local.LocalLlmServiceImpl
@@ -26,9 +25,7 @@ fun main() = runBlocking {
     val interactionService = ConsoleInteractionService()
 
     // 4. Initialize Core Logic
-    val router = Router(ragService, mcpService)
     val orchestrator = OrchestratorService(
-        router = router,
         llmService = yandexService,
         localLlmService = localService,
         ragService = ragService,

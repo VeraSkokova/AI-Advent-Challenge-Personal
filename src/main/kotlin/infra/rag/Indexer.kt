@@ -32,7 +32,7 @@ class Indexer(
 
             fileChunks.forEach { chunk ->
                 // Generate embedding for each chunk
-                val embedding = embeddingClient.getEmbedding(chunk.content)
+                val embedding = embeddingClient.getDocEmbedding(chunk.content)
                 if (embedding.isNotEmpty()) {
                     chunks.add(chunk.copy(embedding = embedding))
                 } else {

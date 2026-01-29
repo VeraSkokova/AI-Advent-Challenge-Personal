@@ -1,6 +1,7 @@
 package infra.rag
 
 import core.domain.model.Message
+import core.domain.model.RagRetrievalResult
 import core.domain.model.Role
 import core.ports.RagService
 import infra.config.AppConfig
@@ -12,69 +13,83 @@ class RagServiceImpl(
     private val config: AppConfig
 ) : RagService {
 
+    // Helper client for embeddings (ensure it has getDocEmbedding / getQueryEmbedding)
     private val embeddingClient = YandexEmbeddingClient(config)
     private val json = Json { ignoreUnknownKeys = true }
-    
+
     val indexer = Indexer(embeddingClient)
 
-    override suspend fun searchAndAnswer(query: String): Message {
+    /**
+     * Main retrieval method for Grey Zone logic.
+     * Returns structured result with scores, or null if retrieval failed/no index.
+     */
+    override suspend fun retrieve(query: String): RagRetrievalResult? {
         // 1. Load Index
         val indexFile = File("index.json")
         if (!indexFile.exists()) {
-            // Fallback to LLM if no index exists
-            return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
+            return null
         }
 
         val chunks: List<Chunk> = try {
             json.decodeFromString(indexFile.readText())
-        } catch (e: Exception) {
-            return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
+        } catch (_: Exception) {
+            return null
         }
 
-        // 2. Embed Query
-        val queryEmbedding = embeddingClient.getEmbedding(query)
+        // 2. Embed Query (using QUERY embedding model)
+        val queryEmbedding = embeddingClient.getQueryEmbedding(query)
         if (queryEmbedding.isEmpty()) {
-             return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
+            return null
         }
 
         // 3. Cosine Similarity Search
-        val results = chunks.map { chunk ->
+        // Calculate all scores first
+        val scoredChunks = chunks.map { chunk ->
             val score = cosineSimilarity(queryEmbedding, chunk.embedding)
             chunk to score
         }
-        .filter { it.second > 0.60 } // Increased threshold to avoid irrelevant matches
-        .sortedByDescending { it.second }
-        .take(3)
+            .sortedByDescending { it.second } // Sort by score DESC
+            .take(3) // Take top 3 candidates
 
-        if (results.isEmpty()) {
-             // If no relevant docs found, return specific signal so Orchestrator uses general LLM
-             return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
+        if (scoredChunks.isEmpty()) return null
+
+        // 4. Calculate Scores & Gap
+        val maxScore = scoredChunks.first().second
+
+        // Calculate gap between 1st and 2nd result (if 2nd exists)
+        val scoreGap = if (scoredChunks.size > 1) {
+            scoredChunks[0].second - scoredChunks[1].second
+        } else {
+            1.0 // If only 1 result, gap is maximum (it's unique)
         }
 
-        // 4. Construct Context
-        val contextBuilder = StringBuilder("📚 **RAG Context Found:**\n")
-        results.forEachIndexed { idx, (chunk, score) ->
+        // 5. Construct Context Text
+        val contextBuilder = StringBuilder("📚 **RAG Context Candidates:**\n")
+        scoredChunks.forEachIndexed { idx, (chunk, score) ->
             contextBuilder.append("\n**[${idx + 1}] ${chunk.documentId}** (Score: ${String.format("%.2f", score)})\n")
             contextBuilder.append("> ${chunk.content.replace("\n", "\n> ")}\n")
         }
 
-        return Message(Role.SYSTEM, contextBuilder.toString())
+        return RagRetrievalResult(
+            maxScore = maxScore,
+            scoreGap = scoreGap,
+            contextText = contextBuilder.toString()
+        )
     }
 
+    // Legacy method (optional, can be removed if not used elsewhere)
+    override suspend fun searchAndAnswer(query: String): Message {
+        val result = retrieve(query)
+        return if (result != null && result.maxScore > 0.6) {
+            Message(Role.SYSTEM, result.contextText)
+        } else {
+            Message(Role.SYSTEM, "NO_RAG_CONTEXT")
+        }
+    }
+
+    // Deprecated method (logic moved to Orchestrator)
     override suspend fun isRelevant(query: String): Boolean {
-        val triggers = listOf(
-            "rag", "раг", "index", "индекс", "base", "база",
-            "doc", "док", "manual", "мануал", "guide", "гайд", 
-            "tutorial", "туториал", "instruction", "инструкци",
-            "reference", "справочник", "api", "апи",
-            "example", "пример", "snippet", "сниппет",
-            "find", "найди", "найти", "search", "поиск", "поищи",
-            "how to", "как использовать", "как сделать", "как работает"
-            // Removed general "what is/explain" to reduce false positives
-        )
-        
-        val lowerQuery = query.lowercase()
-        return triggers.any { lowerQuery.contains(it) }
+        return true // Always try retrieval now
     }
 
     private fun cosineSimilarity(v1: List<Double>, v2: List<Double>): Double {
