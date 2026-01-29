@@ -21,19 +21,20 @@ class RagServiceImpl(
         // 1. Load Index
         val indexFile = File("index.json")
         if (!indexFile.exists()) {
-            return Message(Role.SYSTEM, "⚠️ Index file 'index.json' not found. Run '/index <path>' to ingest documents.")
+            // Fallback to LLM if no index exists
+            return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
         }
 
         val chunks: List<Chunk> = try {
             json.decodeFromString(indexFile.readText())
         } catch (e: Exception) {
-            return Message(Role.SYSTEM, "❌ Failed to load index: ${e.message}")
+            return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
         }
 
         // 2. Embed Query
         val queryEmbedding = embeddingClient.getEmbedding(query)
         if (queryEmbedding.isEmpty()) {
-            return Message(Role.SYSTEM, "❌ Failed to generate embedding for query.")
+             return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
         }
 
         // 3. Cosine Similarity Search
@@ -41,12 +42,13 @@ class RagServiceImpl(
             val score = cosineSimilarity(queryEmbedding, chunk.embedding)
             chunk to score
         }
-        .filter { it.second > 0.4 } // Slightly lowered threshold for better recall
+        .filter { it.second > 0.60 } // Increased threshold to avoid irrelevant matches
         .sortedByDescending { it.second }
         .take(3)
 
         if (results.isEmpty()) {
-             return Message(Role.SYSTEM, "ℹ️ No relevant info found in documentation (threshold 0.4).")
+             // If no relevant docs found, return specific signal so Orchestrator uses general LLM
+             return Message(Role.SYSTEM, "NO_RAG_CONTEXT")
         }
 
         // 4. Construct Context
@@ -61,21 +63,14 @@ class RagServiceImpl(
 
     override suspend fun isRelevant(query: String): Boolean {
         val triggers = listOf(
-            // Tech/RAG specific
             "rag", "раг", "index", "индекс", "base", "база",
-            
-            // Docs/Info
             "doc", "док", "manual", "мануал", "guide", "гайд", 
             "tutorial", "туториал", "instruction", "инструкци",
             "reference", "справочник", "api", "апи",
             "example", "пример", "snippet", "сниппет",
-            
-            // Actions
             "find", "найди", "найти", "search", "поиск", "поищи",
-            "how to", "как использовать", "как сделать", "как работает",
-            
-            // General Info questions (often implies knowledge lookup)
-            "what is", "что такое", "explain", "объясни"
+            "how to", "как использовать", "как сделать", "как работает"
+            // Removed general "what is/explain" to reduce false positives
         )
         
         val lowerQuery = query.lowercase()
