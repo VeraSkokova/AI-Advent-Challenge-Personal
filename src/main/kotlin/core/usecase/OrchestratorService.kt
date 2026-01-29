@@ -61,8 +61,18 @@ class OrchestratorService(
 
         val toolType = router.determineTool(input, forcePrivacy = isPrivacyMode)
 
-        val initialResponse = if (toolType == ToolType.RAG) {
-            ragService.searchAndAnswer(input)
+        var response = if (toolType == ToolType.RAG) {
+            val ragResult = ragService.searchAndAnswer(input)
+            if (ragResult.content == "NO_RAG_CONTEXT") {
+                // Fallback to LLM if RAG found nothing relevant
+                if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
+                    safeCallLocal(context)
+                } else {
+                    safeCallCloud(context)
+                }
+            } else {
+                ragResult
+            }
         } else {
             if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
                 safeCallLocal(context)
@@ -72,33 +82,25 @@ class OrchestratorService(
         }
         
         // Handle Tool Calls (Recursively or Single-Step)
-        if (isToolCall(initialResponse.content)) {
-            val toolResult = mcpService.executeTool(initialResponse.content)
+        if (isToolCall(response.content)) {
+            val toolResult = mcpService.executeTool(response.content)
             
-            // Add tool execution to history
-            // We simulate the conversation: 
-            // User: "Status?" -> Assistant: "{tool: git...}" -> System: "Output: ..."
-            // Then we ask Assistant again for the final answer.
-            
-            messages.add(initialResponse) // The JSON command
+            messages.add(response) // The JSON command
             messages.add(toolResult)      // The Tool Output
             
-            // Refresh context with new history
             context = ConversationContext(messages, profile, capabilities)
             
-            // Call LLM again to synthesize the final answer
             val finalResponse = if (isPrivacyMode || toolType == ToolType.LOCAL_LLM) {
                 safeCallLocal(context)
             } else {
                 safeCallCloud(context)
             }
             
-            messages.add(finalResponse)
-            return finalResponse
-        } else {
-            messages.add(initialResponse)
-            return initialResponse
+            response = finalResponse
         }
+
+        messages.add(response)
+        return response
     }
 
     private fun isToolCall(content: String): Boolean {
